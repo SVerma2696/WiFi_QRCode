@@ -19,7 +19,8 @@
         /* 
          * BROWSER OVERRIDES:
          * Force-hide Microsoft Edge & Chromium's native password reveal/autofill icons.
-         * If not removed, they overlap with our custom Tailwind eye-icon. 
+         * If not removed, they overlap with our custom Tailwind eye-icon, creating a 
+         * confusing "double icon" UI bug on Windows machines.
          */
         input[type="password"]::-ms-reveal,
         input[type="password"]::-ms-clear {
@@ -42,11 +43,13 @@
         }
 
         /*
-         * PRINT MEDIA QUERY:
+         * PRINT MEDIA QUERY (@media print):
          * This code activates ONLY when the user presses Ctrl+P or clicks "Print Guest Card".
-         * The password line is only ever shown here -- never on screen.
+         * It reformats the entire DOM specifically for standard 8.5x11 paper.
+         * The password line is only ever shown here -- never dynamically on screen.
          */
         @media print {
+            /* Remove default browser print margins */
             @page { margin: 0; }
 
             /* 1. Strip all background colors and standard paddings to save ink */
@@ -57,19 +60,19 @@
                 display: block !important;
             }
 
-            /* 2. Unconstrain Tailwind max-widths so the layout fills the paper */
+            /* 2. Unconstrain Tailwind max-widths so the layout naturally fills the paper */
             .max-w-4xl { max-width: 100% !important; width: 100% !important; }
             .overflow-hidden { overflow: visible !important; }
             .shadow-xl { box-shadow: none !important; }
             .border { border: none !important; }
             .rounded-2xl { border-radius: 0 !important; }
 
-            /* 3. Hide the input form side entirely */
+            /* 3. Hide the input form side entirely (we only want to print the QR code) */
             #left-col, .print-hide {
                 display: none !important;
             }
 
-            /* 4. Center the QR output across the entire printed page */
+            /* 4. Center the QR output across the entire printed page using Flexbox */
             #right-col {
                 position: absolute !important;
                 left: 0 !important;
@@ -86,7 +89,7 @@
                 margin: 0 !important;
             }
 
-            /* Remove screen-specific shadows from the QR code for a crisp print */
+            /* Remove screen-specific drop-shadows from the QR code for a crisp print */
             #qrcode-container {
                 box-shadow: none !important;
                 margin-bottom: 30px !important;
@@ -107,7 +110,7 @@
 
             /* 
              * CRITICAL SECURITY: This rule is the ONLY place password-display is ever allowed 
-             * to become visible. The JS never removes its `hidden` class on screen. 
+             * to become visible. The JS never removes its `hidden` class on screen to prevent leaks. 
              */
             #password-display {
                 display: block !important;
@@ -129,15 +132,17 @@
 <body class="bg-slate-50 min-h-screen font-sans text-slate-800 antialiased flex flex-col">
 
     <main class="flex-grow flex items-center justify-center p-4">
+        <!-- Main Card Wrapper: flex-col on mobile (stacked), flex-row on desktop (side-by-side) -->
         <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl flex flex-col md:flex-row overflow-hidden border border-slate-100">
 
             <!-- Left Column: User Input Form -->
-            <div id="left-col" class="w-full md:w-1/2 p-8 lg:p-10 bg-white">
+            <div id="left-col" class="w-full md:w-1/2 p-8 lg:p-10 bg-white flex flex-col">
                 <div class="mb-6">
                     <h1 class="text-3xl font-bold text-slate-900 mb-2">WiFi QR Creator</h1>
                     <p class="text-slate-500 text-sm">Generate a scan-to-connect QR code instantly.</p>
                 </div>
 
+                <!-- Security/Privacy Notice -->
                 <div class="mb-8 flex items-start gap-3 bg-emerald-50 text-emerald-800 px-4 py-3 rounded-lg border border-emerald-200 shadow-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -149,21 +154,25 @@
 
                 <form id="wifi-form" class="space-y-5" novalidate>
 
+                    <!-- SSID Input -->
                     <div>
                         <label for="ssid" class="block text-sm font-semibold text-slate-700 mb-1">Network Name (SSID) *</label>
                         <input type="text" id="ssid" required maxlength="32" placeholder="e.g. MyHomeNetwork"
                             class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
                     </div>
 
+                    <!-- Password Input with Custom Toggle Button -->
                     <div>
                         <label for="password" class="block text-sm font-semibold text-slate-700 mb-1">Password</label>
                         <div class="relative">
-                            <!-- autocomplete="new-password" deters aggressive password managers from injecting icons -->
+                            <!-- autocomplete="new-password" deters aggressive password managers from injecting autofill styling -->
                             <input type="password" id="password" placeholder="Leave blank if no password" autocomplete="new-password"
                                 class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-12">
 
-                            <!-- The toggle button has a solid white background (bg-white) and a tiny margin (m-[2px]) 
-                                 so it physically paints over any lingering browser/extension icons. -->
+                            <!-- 
+                                The toggle button uses a solid white background (bg-white) and absolute positioning 
+                                so it physically paints over any lingering browser/extension icons that bypass our CSS rules.
+                            -->
                             <button type="button" onclick="togglePasswordVisibility()" aria-label="Show password" aria-pressed="false" id="toggle-pwd-btn" 
                                 class="absolute inset-y-[2px] right-[2px] px-3 bg-white rounded-r-md text-slate-400 hover:text-blue-600 focus:outline-none transition-colors flex items-center justify-center">
                                 <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5" aria-hidden="true">
@@ -173,6 +182,7 @@
                         </div>
                     </div>
 
+                    <!-- Encryption Type -->
                     <div>
                         <label for="encryption" class="block text-sm font-semibold text-slate-700 mb-1">Security Type</label>
                         <select id="encryption" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white">
@@ -182,6 +192,7 @@
                         </select>
                     </div>
 
+                    <!-- Additional Toggles -->
                     <div class="space-y-2 mt-2">
                         <div class="flex items-center">
                             <input type="checkbox" id="hidden" class="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
@@ -197,6 +208,27 @@
                     <!-- Hard errors (e.g. missing SSID) or triggered soft errors appear here -->
                     <div id="error-msg" class="hidden text-red-500 text-sm font-medium p-3 bg-red-50 rounded-lg border border-red-100" role="alert"></div>
                 </form>
+
+                <!-- 
+                  GitHub Portfolio Link 
+                  RESPONSIVE DESIGN NOTE: 
+                  - On mobile (stacked layout), 'mt-8' gives it a clean 2rem spacing below the form.
+                  - On desktop (md:mt-auto), because the parent column stretches to match the height 
+                    of the preview column, margin-top: auto mathematically forces this element to 
+                    "pin" itself to the absolute bottom of the container, ensuring a flawless layout.
+                -->
+                <div class="mt-8 md:mt-auto pt-6 border-t border-slate-100 print-hide">
+                    <!-- rel="noopener noreferrer" is a crucial security best-practice when opening external links -->
+                    <a href="https://github.com/SVerma2696/WiFi_QRCode" target="_blank" rel="noopener noreferrer" 
+                       class="group flex items-center justify-center md:justify-start gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors">
+                        
+                        <!-- Inline SVG for the GitHub logo (keeps the app zero-dependency for image assets) -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" class="text-slate-400 group-hover:text-slate-900 transition-colors">
+                            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                        </svg>
+                        <span>View open-source code on GitHub</span>
+                    </a>
+                </div>
             </div>
 
             <!-- Right Column: Visual Output and Actions -->
@@ -204,7 +236,7 @@
 
                 <h2 class="text-xl font-semibold text-white mb-6 print-hide">Live Preview</h2>
 
-                <!-- aria-live announces when the code updates, without spamming on every keystroke since updates are debounced -->
+                <!-- aria-live announces when the code updates to screen readers, without spamming on every keystroke -->
                 <div id="qrcode-container" aria-live="polite" class="bg-white p-4 rounded-xl shadow-2xl min-h-[288px] min-w-[288px] flex items-center justify-center transition-all">
                     <p class="text-slate-400 text-sm px-8" id="placeholder-text">Start typing your network details to generate your code...</p>
                 </div>
@@ -267,7 +299,8 @@
         /**
          * Debounce Utility: 
          * Prevents the generate function from firing on every single keystroke.
-         * It waits until the user pauses typing for 'wait' milliseconds before executing.
+         * It waits until the user pauses typing for 'wait' milliseconds before executing,
+         * significantly improving client-side performance and eliminating screen flicker.
          */
         function debounce(func, wait) {
             let timeout;
@@ -368,11 +401,11 @@
 
             currentWifiString = wifiString;
 
-            // Generate/Update SVG
+            // Generate/Update SVG Configuration
             const qrOptions = {
                 width: 256,
                 height: 256,
-                type: "svg", // Renders as crisp SVG in the browser
+                type: "svg", // Renders as crisp SVG in the browser rather than a blurry canvas
                 data: wifiString,
                 margin: 4,
                 dotsOptions: { color: "#0f172a", type: "square" },
