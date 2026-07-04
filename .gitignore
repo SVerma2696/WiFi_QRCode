@@ -1,0 +1,21 @@
+# OS generated files (Prevents Mac and Windows junk files from uploading)
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files (Prevents VS Code or other editor settings from uploading)
+.idea/
+.vscode/
+*.suo
+.ntvs
+*.njsproj
+*.sln
+*.sw?
+
+# Just in case someone ever decides to add Node or API keys in the future
+node_modules/
+.env

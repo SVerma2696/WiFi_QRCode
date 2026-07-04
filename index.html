@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Generate a scan-to-connect WiFi QR code entirely in your browser.">
+    <title>WiFi QR Code Generator</title>
+
+    <!-- Load Tailwind CSS via CDN for rapid, responsive UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!--
+      qr-code-styling supports native SVG rendering (crisp, infinitely scalable QR codes)
+      and has built-in padded downloading, completely removing the need for manual canvas logic.
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
+
+    <style>
+        /* 
+         * BROWSER OVERRIDES:
+         * Force-hide Microsoft Edge & Chromium's native password reveal/autofill icons.
+         * If not removed, they overlap with our custom Tailwind eye-icon. 
+         */
+        input[type="password"]::-ms-reveal,
+        input[type="password"]::-ms-clear {
+            display: none !important;
+        }
+        input[type="password"]::-webkit-contacts-auto-fill-button,
+        input[type="password"]::-webkit-credentials-auto-fill-button {
+            visibility: hidden !important;
+            display: none !important;
+            pointer-events: none !important;
+            opacity: 0 !important;
+        }
+
+        /* Ensure the generated QR code remains centered and transitions smoothly when updated */
+        #qrcode-container svg, #qrcode-container canvas {
+            margin: 0 auto;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+        }
+
+        /*
+         * PRINT MEDIA QUERY:
+         * This code activates ONLY when the user presses Ctrl+P or clicks "Print Guest Card".
+         * The password line is only ever shown here -- never on screen.
+         */
+        @media print {
+            @page { margin: 0; }
+
+            /* 1. Strip all background colors and standard paddings to save ink */
+            body, main {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                display: block !important;
+            }
+
+            /* 2. Unconstrain Tailwind max-widths so the layout fills the paper */
+            .max-w-4xl { max-width: 100% !important; width: 100% !important; }
+            .overflow-hidden { overflow: visible !important; }
+            .shadow-xl { box-shadow: none !important; }
+            .border { border: none !important; }
+            .rounded-2xl { border-radius: 0 !important; }
+
+            /* 3. Hide the input form side entirely */
+            #left-col, .print-hide {
+                display: none !important;
+            }
+
+            /* 4. Center the QR output across the entire printed page */
+            #right-col {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100vw !important;
+                min-height: 100vh !important;
+                background-color: white !important;
+                border: none !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
+                align-items: center !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            /* Remove screen-specific shadows from the QR code for a crisp print */
+            #qrcode-container {
+                box-shadow: none !important;
+                margin-bottom: 30px !important;
+            }
+            #qrcode-container svg, #qrcode-container canvas {
+                box-shadow: none !important;
+            }
+
+            /* 5. Force text elements to become visible (they are hidden by default in standard CSS) */
+            #network-display {
+                display: block !important;
+                color: black !important;
+                font-size: 28px !important;
+                font-weight: 700 !important;
+                margin-bottom: 12px !important;
+                font-family: monospace;
+            }
+
+            /* 
+             * CRITICAL SECURITY: This rule is the ONLY place password-display is ever allowed 
+             * to become visible. The JS never removes its `hidden` class on screen. 
+             */
+            #password-display {
+                display: block !important;
+                color: #333333 !important;
+                font-size: 20px !important;
+                font-weight: 500 !important;
+                font-family: monospace;
+                margin-bottom: 12px !important;
+            }
+            #print-instructions {
+                display: block !important;
+                color: #333333 !important;
+                font-size: 18px !important;
+                font-weight: 500 !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 antialiased flex flex-col">
+
+    <main class="flex-grow flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl flex flex-col md:flex-row overflow-hidden border border-slate-100">
+
+            <!-- Left Column: User Input Form -->
+            <div id="left-col" class="w-full md:w-1/2 p-8 lg:p-10 bg-white">
+                <div class="mb-6">
+                    <h1 class="text-3xl font-bold text-slate-900 mb-2">WiFi QR Creator</h1>
+                    <p class="text-slate-500 text-sm">Generate a scan-to-connect QR code instantly.</p>
+                </div>
+
+                <div class="mb-8 flex items-start gap-3 bg-emerald-50 text-emerald-800 px-4 py-3 rounded-lg border border-emerald-200 shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <p class="text-xs leading-relaxed">
+                        <strong>Your password never leaves your device:</strong> the QR code is generated locally in your browser and is never transmitted, saved, or logged anywhere.
+                    </p>
+                </div>
+
+                <form id="wifi-form" class="space-y-5" novalidate>
+
+                    <div>
+                        <label for="ssid" class="block text-sm font-semibold text-slate-700 mb-1">Network Name (SSID) *</label>
+                        <input type="text" id="ssid" required maxlength="32" placeholder="e.g. MyHomeNetwork"
+                            class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                    </div>
+
+                    <div>
+                        <label for="password" class="block text-sm font-semibold text-slate-700 mb-1">Password</label>
+                        <div class="relative">
+                            <!-- autocomplete="new-password" deters aggressive password managers from injecting icons -->
+                            <input type="password" id="password" placeholder="Leave blank if no password" autocomplete="new-password"
+                                class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-12">
+
+                            <!-- The toggle button has a solid white background (bg-white) and a tiny margin (m-[2px]) 
+                                 so it physically paints over any lingering browser/extension icons. -->
+                            <button type="button" onclick="togglePasswordVisibility()" aria-label="Show password" aria-pressed="false" id="toggle-pwd-btn" 
+                                class="absolute inset-y-[2px] right-[2px] px-3 bg-white rounded-r-md text-slate-400 hover:text-blue-600 focus:outline-none transition-colors flex items-center justify-center">
+                                <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="encryption" class="block text-sm font-semibold text-slate-700 mb-1">Security Type</label>
+                        <select id="encryption" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white">
+                            <option value="WPA">WPA/WPA2/WPA3 (Most Common)</option>
+                            <option value="WEP">WEP (Older Standard)</option>
+                            <option value="nopass">None (Open Network)</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-2 mt-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="hidden" class="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                            <label for="hidden" class="ml-3 text-sm text-slate-600 font-medium">This is a hidden network</label>
+                        </div>
+
+                        <div class="flex items-center">
+                            <input type="checkbox" id="show-password-on-print" class="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                            <label for="show-password-on-print" class="ml-3 text-sm text-slate-600 font-medium">Show password on printed card (fallback)</label>
+                        </div>
+                    </div>
+
+                    <!-- Hard errors (e.g. missing SSID) or triggered soft errors appear here -->
+                    <div id="error-msg" class="hidden text-red-500 text-sm font-medium p-3 bg-red-50 rounded-lg border border-red-100" role="alert"></div>
+                </form>
+            </div>
+
+            <!-- Right Column: Visual Output and Actions -->
+            <div id="right-col" class="w-full md:w-1/2 p-8 lg:p-10 bg-slate-900 flex flex-col items-center justify-center text-center relative border-t md:border-t-0 md:border-l border-slate-200">
+
+                <h2 class="text-xl font-semibold text-white mb-6 print-hide">Live Preview</h2>
+
+                <!-- aria-live announces when the code updates, without spamming on every keystroke since updates are debounced -->
+                <div id="qrcode-container" aria-live="polite" class="bg-white p-4 rounded-xl shadow-2xl min-h-[288px] min-w-[288px] flex items-center justify-center transition-all">
+                    <p class="text-slate-400 text-sm px-8" id="placeholder-text">Start typing your network details to generate your code...</p>
+                </div>
+
+                <!-- 
+                  Print-only text. IMPORTANT: neither of these ever has its `hidden` class
+                  removed by JS on screen -- only the @media print rule reveals them. 
+                -->
+                <p id="network-display" class="mt-6 text-blue-300 font-mono text-sm hidden"></p>
+                <p id="password-display" class="text-blue-200 font-mono text-sm hidden"></p>
+                <p id="print-instructions" class="hidden mt-2 text-slate-400 text-sm">Point your phone's camera here to connect directly!</p>
+
+                <!-- 
+                  Action buttons container. 
+                  Architectural Note: Visibility state is managed entirely via Tailwind's 'hidden' utility class 
+                  rather than inline styles. The 'grid' class is explicitly declared here so the layout intent 
+                  lives natively in the markup, protecting against layout breakage if the visibility logic is refactored.
+                -->
+                <div id="action-buttons" class="hidden w-full max-w-sm mt-6 grid grid-cols-2 gap-3 print-hide">
+
+                    <button type="button" onclick="downloadCode('svg')" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Get SVG
+                    </button>
+
+                    <button type="button" onclick="downloadCode('png')" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Get PNG
+                    </button>
+
+                    <button type="button" id="copy-btn" onclick="copyWifiString()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                        <span id="copy-btn-text">Copy String</span>
+                    </button>
+
+                    <button type="button" id="print-card-btn" onclick="handlePrintClick()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        Print Card
+                    </button>
+
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Global variables to maintain application state
+        let qrCodeStylingInstance = null;
+        let currentWifiString = ""; // Stores the raw MECARD string for the "Copy String" feature
+
+        /**
+         * Debounce Utility: 
+         * Prevents the generate function from firing on every single keystroke.
+         * It waits until the user pauses typing for 'wait' milliseconds before executing.
+         */
+        function debounce(func, wait) {
+            let timeout;
+            const debounced = function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+            // Allows us to forcefully execute the pending function immediately (e.g., right before a download)
+            debounced.flush = () => clearTimeout(timeout);
+            return debounced;
+        }
+
+        /**
+         * Validates absolute blockers. If these fail, there is nothing to render.
+         */
+        function getHardError(ssid) {
+            if (!ssid) return "Network Name (SSID) is required.";
+            if (ssid.length > 32) return "Network name is too long (32 characters max).";
+            return null;
+        }
+
+        /**
+         * Validates issues that won't stop the QR from physically generating, 
+         * but will cause the connection to fail on the user's phone.
+         */
+        function getSoftWarning(password, encryption) {
+            if (encryption === 'WPA' && password) {
+                if (password.length < 8) return "WPA passwords must be at least 8 characters — this code won't connect yet.";
+                if (password.length > 63) return "WPA passwords must be 63 characters or fewer.";
+            }
+            if (encryption === 'WEP' && password && ![5, 10, 13, 26].includes(password.length)) {
+                return "WEP keys are usually 5 or 13 characters (or 10/26 hex digits).";
+            }
+            return null;
+        }
+
+        /**
+         * Core Logic: Extracts form data, validates it, builds the MECARD-style string,
+         * and instructs the library to render the SVG preview.
+         *
+         * @param {boolean} showWarning - Determines if soft-warnings should be visually displayed.
+         *   Kept false while typing to prevent flashing error text mid-keystroke. 
+         *   Set to true on blur, checkbox toggle, or pre-action flush.
+         */
+        function generateQRCode(showWarning = false) {
+            const ssid = document.getElementById('ssid').value.trim();
+            const password = document.getElementById('password').value;
+            const encryption = document.getElementById('encryption').value;
+            const isHidden = document.getElementById('hidden').checked;
+            const showPasswordOnPrint = document.getElementById('show-password-on-print').checked;
+            
+            const errorMsg = document.getElementById('error-msg');
+            const actionButtons = document.getElementById('action-buttons');
+            const container = document.getElementById('qrcode-container');
+            const networkDisplay = document.getElementById('network-display');
+            const passwordDisplay = document.getElementById('password-display');
+
+            // Handle Empty State: Clear UI and reset functionality if all inputs are erased.
+            if (!ssid && !password) {
+                container.innerHTML = '<p class="text-slate-400 text-sm px-8" id="placeholder-text">Start typing your network details to generate your code...</p>';
+                actionButtons.classList.add('hidden'); // Standardized visibility toggling via classList
+                errorMsg.classList.add('hidden');
+                currentWifiString = "";
+                qrCodeStylingInstance = null;
+                return;
+            }
+
+            // Handle Hard Errors (Blockers): E.g., missing SSID or violating 32-byte spec limits.
+            const hardError = getHardError(ssid);
+            if (hardError) {
+                errorMsg.textContent = hardError;
+                errorMsg.classList.remove('hidden');
+                actionButtons.classList.add('hidden'); // Ensures actions are inaccessible for invalid state
+                currentWifiString = "";
+                return;
+            }
+
+            // Handle Soft Errors (Warnings): E.g., short WPA passwords that will fail on the device.
+            const softWarning = getSoftWarning(password, encryption);
+            if (softWarning && showWarning) {
+                errorMsg.textContent = softWarning;
+                errorMsg.classList.remove('hidden');
+            } else {
+                errorMsg.classList.add('hidden');
+            }
+
+            // Format Connection String
+            // MECARD rules dictate that special characters (; , \ :) must be escaped with a backslash
+            const escapeString = (str) => str.replace(/([\\;:,])/g, "\\$1");
+            const escapedSSID = escapeString(ssid);
+            const escapedPassword = escapeString(password);
+
+            let wifiString = `WIFI:S:${escapedSSID};T:${encryption};`;
+            if (encryption !== 'nopass' && password) {
+                wifiString += `P:${escapedPassword};`;
+            }
+            wifiString += `H:${isHidden ? 'true' : 'false'};;`;
+
+            currentWifiString = wifiString;
+
+            // Generate/Update SVG
+            const qrOptions = {
+                width: 256,
+                height: 256,
+                type: "svg", // Renders as crisp SVG in the browser
+                data: wifiString,
+                margin: 4,
+                dotsOptions: { color: "#0f172a", type: "square" },
+                backgroundOptions: { color: "#ffffff" }
+            };
+
+            if (!qrCodeStylingInstance) {
+                container.innerHTML = '';
+                qrCodeStylingInstance = new QRCodeStyling(qrOptions);
+                qrCodeStylingInstance.append(container);
+            } else {
+                qrCodeStylingInstance.update(qrOptions);
+            }
+
+            // Update DOM text targets for Printing.
+            // IMPORTANT: We update textContent here, but we NEVER manipulate their classList.
+            // They remain hidden on screen, and are only revealed via the @media print CSS block.
+            networkDisplay.textContent = `Network: ${ssid}`;
+            if (showPasswordOnPrint && password) {
+                passwordDisplay.textContent = `Password: ${password}`;
+            } else {
+                passwordDisplay.textContent = '';
+            }
+
+            // State Synchronization: Block download/print/copy buttons while there's an 
+            // unresolved soft warning to prevent exporting non-functional codes.
+            if (softWarning) {
+                actionButtons.classList.add('hidden');
+            } else {
+                actionButtons.classList.remove('hidden');
+            }
+        }
+
+        // --- Event Listeners ---
+        const debouncedGenerate = debounce(() => generateQRCode(false), 400);
+
+        // Inputs: Debounce generation while actively typing
+        ['ssid', 'encryption'].forEach(id => {
+            document.getElementById(id).addEventListener('input', debouncedGenerate);
+        });
+        
+        const passwordField = document.getElementById('password');
+        passwordField.addEventListener('input', debouncedGenerate);
+        
+        // Show warnings immediately when user clicks away from the password field
+        passwordField.addEventListener('blur', () => {
+            debouncedGenerate.flush();
+            generateQRCode(true);
+        });
+
+        // Checkboxes: Trigger immediately on click
+        document.getElementById('hidden').addEventListener('change', () => generateQRCode(true));
+        document.getElementById('show-password-on-print').addEventListener('change', () => generateQRCode(true));
+
+
+        /**
+         * Ensures the UI state perfectly matches the current inputs before executing an action.
+         * Solves the race condition where a user types and immediately clicks "Download" 
+         * before the 400ms debounce window finishes.
+         * @returns {boolean} True if it is safe to proceed (no warnings/errors).
+         */
+        function syncBeforeAction() {
+            debouncedGenerate.flush(); // Clear any pending timeouts
+            generateQRCode(true); // Force a synchronous, fully-validated render
+            
+            // Validate safety by checking if the action buttons are currently exposed in the DOM
+            return !document.getElementById('action-buttons').classList.contains('hidden');
+        }
+
+        /**
+         * Print Handler: Syncs state, allows the DOM a microsecond to paint, then prints.
+         */
+        function handlePrintClick() {
+            if (!syncBeforeAction()) return;
+            
+            // The small timeout ensures the browser thread has time to physically paint 
+            // the generated QR canvas to the DOM before window.print() freezes the thread.
+            setTimeout(() => {
+                window.print();
+            }, 50);
+        }
+
+        // Fallback for users hitting Ctrl+P natively
+        window.addEventListener('beforeprint', () => generateQRCode(true));
+
+        /**
+         * Power User: Copies raw MECARD string.
+         * Uses modern clipboard API with legacy execCommand fallback.
+         */
+        async function copyWifiString() {
+            if (!syncBeforeAction() || !currentWifiString) return;
+
+            const btnText = document.getElementById('copy-btn-text');
+            const originalText = btnText.textContent;
+
+            try {
+                await navigator.clipboard.writeText(currentWifiString);
+                showCopySuccess(btnText, originalText);
+            } catch (err) {
+                try {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = currentWifiString;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(textArea);
+                    showCopySuccess(btnText, originalText);
+                } catch (fallbackErr) {
+                    console.error('Failed to copy text: ', fallbackErr);
+                }
+            }
+        }
+
+        function showCopySuccess(element, originalText) {
+            element.textContent = 'Copied!';
+            setTimeout(() => { element.textContent = originalText; }, 2000);
+        }
+
+        /**
+         * Download Handler: Leverages library's built in download mechanism.
+         * (Library successfully rasterizes the live SVG into a PNG behind the scenes).
+         */
+        function downloadCode(fileType) {
+            if (!syncBeforeAction() || !qrCodeStylingInstance) return;
+
+            const ssidName = document.getElementById('ssid').value.trim() || 'network';
+            const safeName = ssidName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+            qrCodeStylingInstance.download({
+                name: `WiFi_QR_${safeName}`,
+                extension: fileType
+            });
+        }
+
+        /**
+         * Toggles password input type to reveal/hide plaintext.
+         * Replaces the SVG icon to match current state.
+         */
+        function togglePasswordVisibility() {
+            const pwdInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eye-icon');
+            const toggleBtn = document.getElementById('toggle-pwd-btn');
+
+            if (pwdInput.type === 'password') {
+                pwdInput.type = 'text';
+                toggleBtn.setAttribute('aria-label', 'Hide password');
+                toggleBtn.setAttribute('aria-pressed', 'true');
+                eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />`;
+            } else {
+                pwdInput.type = 'password';
+                toggleBtn.setAttribute('aria-label', 'Show password');
+                toggleBtn.setAttribute('aria-pressed', 'false');
+                eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />`;
+            }
+        }
+    </script>
+</body>
+</html>
