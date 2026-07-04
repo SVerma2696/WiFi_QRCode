@@ -72,3 +72,4 @@ User Input (SSID/Password) -> JS Debouncer -> MECARD Formatter -> QR Canvas Rend
 This project was developed to demonstrate frontend DOM manipulation and client-side security practices.
 * **Styling Engine:** [Tailwind CSS](https://tailwindcss.com/).
 * **QR Generation Library:** [qr-code-styling by denocoeur](https://qr-code-styling.com/).
+* **App Logo:** [Clipart Library](https://clipart-library.com/clipart/wifi-logo-clipart-18.htm)

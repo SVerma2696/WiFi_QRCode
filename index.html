@@ -4,23 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Generate a scan-to-connect WiFi QR code entirely in your browser.">
+    
+    <!-- Application Favicon: Displays the custom Wi-Fi logo in the browser tab -->
+    <link rel="icon" type="image/png" href="https://img2.clipart-library.com/28/wifi-logo-clipart/wifi-logo-clipart-18.png">
+    
     <title>WiFi QR Code Generator</title>
 
-    <!-- Load Tailwind CSS via CDN for rapid, responsive UI styling -->
+    <!-- 
+      Architecture Note: Using a CDN for Tailwind CSS allows for rapid, zero-build-step 
+      prototyping while still delivering a highly responsive, modern UI. 
+    -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!--
-      qr-code-styling supports native SVG rendering (crisp, infinitely scalable QR codes)
-      and has built-in padded downloading, completely removing the need for manual canvas logic.
+      Dependency Injection: qr-code-styling is chosen over older canvas-only libraries 
+      because it supports native SVG rendering (for crisp, infinitely scalable codes) 
+      and includes built-in padded downloading out of the box.
     -->
     <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
 
     <style>
         /* 
-         * BROWSER OVERRIDES:
-         * Force-hide Microsoft Edge & Chromium's native password reveal/autofill icons.
-         * If not removed, they overlap with our custom Tailwind eye-icon, creating a 
-         * confusing "double icon" UI bug on Windows machines.
+         * BROWSER UI OVERRIDES:
+         * Microsoft Edge & Chromium natively inject their own password reveal/autofill icons.
+         * If not forcefully removed via CSS, they overlap with our custom Tailwind eye-icon, 
+         * creating a confusing "double icon" UI bug on Windows machines.
          */
         input[type="password"]::-ms-reveal,
         input[type="password"]::-ms-clear {
@@ -34,7 +42,11 @@
             opacity: 0 !important;
         }
 
-        /* Ensure the generated QR code remains centered and transitions smoothly when updated */
+        /* 
+         * PRESENTATION LOGIC:
+         * Ensures the generated QR code remains perfectly centered and scales 
+         * smoothly when the user updates their network settings.
+         */
         #qrcode-container svg, #qrcode-container canvas {
             margin: 0 auto;
             border-radius: 0.5rem;
@@ -44,15 +56,15 @@
 
         /*
          * PRINT MEDIA QUERY (@media print):
-         * This code activates ONLY when the user presses Ctrl+P or clicks "Print Guest Card".
-         * It reformats the entire DOM specifically for standard 8.5x11 paper.
-         * The password line is only ever shown here -- never dynamically on screen.
+         * This code activates ONLY when the user initiates a print command (Ctrl+P).
+         * It reformats the entire DOM specifically for standard 8.5x11 paper, acting 
+         * as an alternative "view state" without needing complex JavaScript routing.
          */
         @media print {
-            /* Remove default browser print margins */
+            /* Remove default browser print margins to maximize layout control */
             @page { margin: 0; }
 
-            /* 1. Strip all background colors and standard paddings to save ink */
+            /* 1. Strip all background colors and screen paddings to save user ink */
             body, main {
                 background: white !important;
                 margin: 0 !important;
@@ -60,19 +72,19 @@
                 display: block !important;
             }
 
-            /* 2. Unconstrain Tailwind max-widths so the layout naturally fills the paper */
+            /* 2. Unconstrain Tailwind max-widths so the layout naturally fills the physical paper */
             .max-w-4xl { max-width: 100% !important; width: 100% !important; }
             .overflow-hidden { overflow: visible !important; }
             .shadow-xl { box-shadow: none !important; }
             .border { border: none !important; }
             .rounded-2xl { border-radius: 0 !important; }
 
-            /* 3. Hide the input form side entirely (we only want to print the QR code) */
+            /* 3. Hide the input form side entirely (we only want to print the generated asset) */
             #left-col, .print-hide {
                 display: none !important;
             }
 
-            /* 4. Center the QR output across the entire printed page using Flexbox */
+            /* 4. Center the QR output across the entire printed page using standard Flexbox */
             #right-col {
                 position: absolute !important;
                 left: 0 !important;
@@ -89,7 +101,7 @@
                 margin: 0 !important;
             }
 
-            /* Remove screen-specific drop-shadows from the QR code for a crisp print */
+            /* Remove screen-specific drop-shadows from the QR code for a crisp, flat print */
             #qrcode-container {
                 box-shadow: none !important;
                 margin-bottom: 30px !important;
@@ -98,7 +110,7 @@
                 box-shadow: none !important;
             }
 
-            /* 5. Force text elements to become visible (they are hidden by default in standard CSS) */
+            /* 5. Force specific text elements to become visible on paper */
             #network-display {
                 display: block !important;
                 color: black !important;
@@ -109,8 +121,10 @@
             }
 
             /* 
-             * CRITICAL SECURITY: This rule is the ONLY place password-display is ever allowed 
-             * to become visible. The JS never removes its `hidden` class on screen to prevent leaks. 
+             * CRITICAL SECURITY ARCHITECTURE: 
+             * This rule is the ONLY place `password-display` is allowed to become visible. 
+             * JavaScript never removes its `hidden` class on the screen, guaranteeing the 
+             * password cannot accidentally leak onto the live UI.
              */
             #password-display {
                 display: block !important;
@@ -132,17 +146,32 @@
 <body class="bg-slate-50 min-h-screen font-sans text-slate-800 antialiased flex flex-col">
 
     <main class="flex-grow flex items-center justify-center p-4">
-        <!-- Main Card Wrapper: flex-col on mobile (stacked), flex-row on desktop (side-by-side) -->
+        <!-- 
+          Main Application Card: 
+          Utilizes responsive Flexbox (flex-col on mobile, flex-row on desktop) 
+          to ensure a seamless user experience across all device sizes.
+        -->
         <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl flex flex-col md:flex-row overflow-hidden border border-slate-100">
 
-            <!-- Left Column: User Input Form -->
+            <!-- Left Column: Data Entry & Configuration -->
             <div id="left-col" class="w-full md:w-1/2 p-8 lg:p-10 bg-white flex flex-col">
-                <div class="mb-6">
-                    <h1 class="text-3xl font-bold text-slate-900 mb-2">WiFi QR Creator</h1>
-                    <p class="text-slate-500 text-sm">Generate a scan-to-connect QR code instantly.</p>
+                
+                <!-- Header Section with Logo -->
+                <div class="mb-6 flex items-center gap-4">
+                    <!-- Sourced WiFi Logo -->
+                    <img src="https://img2.clipart-library.com/28/wifi-logo-clipart/wifi-logo-clipart-18.png" 
+                         alt="WiFi Signal Logo" 
+                         class="w-12 h-12 object-contain drop-shadow-sm">
+                    <div>
+                        <h1 class="text-3xl font-bold text-slate-900 mb-1">WiFi QR Creator</h1>
+                        <p class="text-slate-500 text-sm leading-tight">Generate a scan-to-connect QR code instantly.</p>
+                    </div>
                 </div>
 
-                <!-- Security/Privacy Notice -->
+                <!-- 
+                  Privacy Shield Notice: 
+                  Establishes user trust by clearly explaining the client-side architecture.
+                -->
                 <div class="mb-8 flex items-start gap-3 bg-emerald-50 text-emerald-800 px-4 py-3 rounded-lg border border-emerald-200 shadow-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -152,7 +181,8 @@
                     </p>
                 </div>
 
-                <form id="wifi-form" class="space-y-5" novalidate>
+                <!-- Semantic Form Structure -->
+                <form id="wifi-form" class="space-y-5 flex-grow" novalidate>
 
                     <!-- SSID Input -->
                     <div>
@@ -161,17 +191,18 @@
                             class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
                     </div>
 
-                    <!-- Password Input with Custom Toggle Button -->
+                    <!-- Password Input with Custom Accessibility Toggle -->
                     <div>
                         <label for="password" class="block text-sm font-semibold text-slate-700 mb-1">Password</label>
                         <div class="relative">
-                            <!-- autocomplete="new-password" deters aggressive password managers from injecting autofill styling -->
+                            <!-- autocomplete="new-password" deters aggressive password managers from injecting UI -->
                             <input type="password" id="password" placeholder="Leave blank if no password" autocomplete="new-password"
                                 class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-12">
 
                             <!-- 
-                                The toggle button uses a solid white background (bg-white) and absolute positioning 
-                                so it physically paints over any lingering browser/extension icons that bypass our CSS rules.
+                                Visibility Toggle: 
+                                Uses absolute positioning and a solid background to paint over browser defaults.
+                                Includes aria-labels for screen reader accessibility.
                             -->
                             <button type="button" onclick="togglePasswordVisibility()" aria-label="Show password" aria-pressed="false" id="toggle-pwd-btn" 
                                 class="absolute inset-y-[2px] right-[2px] px-3 bg-white rounded-r-md text-slate-400 hover:text-blue-600 focus:outline-none transition-colors flex items-center justify-center">
@@ -182,7 +213,7 @@
                         </div>
                     </div>
 
-                    <!-- Encryption Type -->
+                    <!-- Security Protocol Configuration -->
                     <div>
                         <label for="encryption" class="block text-sm font-semibold text-slate-700 mb-1">Security Type</label>
                         <select id="encryption" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white">
@@ -192,7 +223,7 @@
                         </select>
                     </div>
 
-                    <!-- Additional Toggles -->
+                    <!-- Edge-Case Toggles -->
                     <div class="space-y-2 mt-2">
                         <div class="flex items-center">
                             <input type="checkbox" id="hidden" class="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
@@ -205,24 +236,20 @@
                         </div>
                     </div>
 
-                    <!-- Hard errors (e.g. missing SSID) or triggered soft errors appear here -->
+                    <!-- Dynamic Validation Alert Container -->
                     <div id="error-msg" class="hidden text-red-500 text-sm font-medium p-3 bg-red-50 rounded-lg border border-red-100" role="alert"></div>
                 </form>
 
                 <!-- 
-                  GitHub Portfolio Link 
-                  RESPONSIVE DESIGN NOTE: 
-                  - On mobile (stacked layout), 'mt-8' gives it a clean 2rem spacing below the form.
-                  - On desktop (md:mt-auto), because the parent column stretches to match the height 
-                    of the preview column, margin-top: auto mathematically forces this element to 
-                    "pin" itself to the absolute bottom of the container, ensuring a flawless layout.
+                  Portfolio Link (Desktop Pinning): 
+                  `md:mt-auto` mathematically pins this link to the bottom of the left column 
+                  on desktop devices, balancing the height of the right column perfectly.
                 -->
                 <div class="mt-8 md:mt-auto pt-6 border-t border-slate-100 print-hide">
-                    <!-- rel="noopener noreferrer" is a crucial security best-practice when opening external links -->
                     <a href="https://github.com/SVerma2696/WiFi_QRCode" target="_blank" rel="noopener noreferrer" 
                        class="group flex items-center justify-center md:justify-start gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors">
                         
-                        <!-- Inline SVG for the GitHub logo (keeps the app zero-dependency for image assets) -->
+                        <!-- Inline SVG GitHub Logo (Zero external asset dependency) -->
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" class="text-slate-400 group-hover:text-slate-900 transition-colors">
                             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
                         </svg>
@@ -231,30 +258,26 @@
                 </div>
             </div>
 
-            <!-- Right Column: Visual Output and Actions -->
+            <!-- Right Column: Visual Output & Export Actions -->
             <div id="right-col" class="w-full md:w-1/2 p-8 lg:p-10 bg-slate-900 flex flex-col items-center justify-center text-center relative border-t md:border-t-0 md:border-l border-slate-200">
 
                 <h2 class="text-xl font-semibold text-white mb-6 print-hide">Live Preview</h2>
 
-                <!-- aria-live announces when the code updates to screen readers, without spamming on every keystroke -->
+                <!-- 
+                  Live Rendering Surface:
+                  `aria-live="polite"` ensures screen readers announce QR generation updates 
+                  without interrupting the user during rapid keystrokes.
+                -->
                 <div id="qrcode-container" aria-live="polite" class="bg-white p-4 rounded-xl shadow-2xl min-h-[288px] min-w-[288px] flex items-center justify-center transition-all">
                     <p class="text-slate-400 text-sm px-8" id="placeholder-text">Start typing your network details to generate your code...</p>
                 </div>
 
-                <!-- 
-                  Print-only text. IMPORTANT: neither of these ever has its `hidden` class
-                  removed by JS on screen -- only the @media print rule reveals them. 
-                -->
+                <!-- Contextual Print Elements (Revealed exclusively via CSS @media print) -->
                 <p id="network-display" class="mt-6 text-blue-300 font-mono text-sm hidden"></p>
                 <p id="password-display" class="text-blue-200 font-mono text-sm hidden"></p>
                 <p id="print-instructions" class="hidden mt-2 text-slate-400 text-sm">Point your phone's camera here to connect directly!</p>
 
-                <!-- 
-                  Action buttons container. 
-                  Architectural Note: Visibility state is managed entirely via Tailwind's 'hidden' utility class 
-                  rather than inline styles. The 'grid' class is explicitly declared here so the layout intent 
-                  lives natively in the markup, protecting against layout breakage if the visibility logic is refactored.
-                -->
+                <!-- Export Action Board -->
                 <div id="action-buttons" class="hidden w-full max-w-sm mt-6 grid grid-cols-2 gap-3 print-hide">
 
                     <button type="button" onclick="downloadCode('svg')" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
@@ -291,16 +314,16 @@
         </div>
     </main>
 
+    <!-- Application Logic -->
     <script>
-        // Global variables to maintain application state
+        // State Management References
         let qrCodeStylingInstance = null;
-        let currentWifiString = ""; // Stores the raw MECARD string for the "Copy String" feature
+        let currentWifiString = ""; 
 
         /**
-         * Debounce Utility: 
-         * Prevents the generate function from firing on every single keystroke.
-         * It waits until the user pauses typing for 'wait' milliseconds before executing,
-         * significantly improving client-side performance and eliminating screen flicker.
+         * Performance Optimization: Debounce Utility
+         * Delays function execution until the user stops typing for [wait] milliseconds.
+         * Crucial for preventing heavy SVG redraws and UI flickering on every single keystroke.
          */
         function debounce(func, wait) {
             let timeout;
@@ -308,13 +331,14 @@
                 clearTimeout(timeout);
                 timeout = setTimeout(() => func.apply(this, args), wait);
             };
-            // Allows us to forcefully execute the pending function immediately (e.g., right before a download)
+            // Expose a flush method to forcefully execute pending generation before an explicit user action
             debounced.flush = () => clearTimeout(timeout);
             return debounced;
         }
 
         /**
-         * Validates absolute blockers. If these fail, there is nothing to render.
+         * Input Validation (Hard Errors)
+         * Evaluates conditions where the MECARD format fundamentally breaks (e.g., missing SSID).
          */
         function getHardError(ssid) {
             if (!ssid) return "Network Name (SSID) is required.";
@@ -323,8 +347,8 @@
         }
 
         /**
-         * Validates issues that won't stop the QR from physically generating, 
-         * but will cause the connection to fail on the user's phone.
+         * Input Validation (Soft Warnings)
+         * Evaluates logic errors where a QR code can render, but will fail to authorize on device.
          */
         function getSoftWarning(password, encryption) {
             if (encryption === 'WPA' && password) {
@@ -338,12 +362,10 @@
         }
 
         /**
-         * Core Logic: Extracts form data, validates it, builds the MECARD-style string,
-         * and instructs the library to render the SVG preview.
-         *
-         * @param {boolean} showWarning - Determines if soft-warnings should be visually displayed.
-         *   Kept false while typing to prevent flashing error text mid-keystroke. 
-         *   Set to true on blur, checkbox toggle, or pre-action flush.
+         * Core Generation Engine
+         * Orchestrates data extraction, MECARD formatting, and DOM injection.
+         * 
+         * @param {boolean} showWarning - Suppresses soft-warnings during active typing to avoid UX disruption.
          */
         function generateQRCode(showWarning = false) {
             const ssid = document.getElementById('ssid').value.trim();
@@ -358,27 +380,27 @@
             const networkDisplay = document.getElementById('network-display');
             const passwordDisplay = document.getElementById('password-display');
 
-            // Handle Empty State: Clear UI and reset functionality if all inputs are erased.
+            // Handle Application Reset State
             if (!ssid && !password) {
                 container.innerHTML = '<p class="text-slate-400 text-sm px-8" id="placeholder-text">Start typing your network details to generate your code...</p>';
-                actionButtons.classList.add('hidden'); // Standardized visibility toggling via classList
+                actionButtons.classList.add('hidden'); 
                 errorMsg.classList.add('hidden');
                 currentWifiString = "";
                 qrCodeStylingInstance = null;
                 return;
             }
 
-            // Handle Hard Errors (Blockers): E.g., missing SSID or violating 32-byte spec limits.
+            // Block Generation Pipeline on Hard Errors
             const hardError = getHardError(ssid);
             if (hardError) {
                 errorMsg.textContent = hardError;
                 errorMsg.classList.remove('hidden');
-                actionButtons.classList.add('hidden'); // Ensures actions are inaccessible for invalid state
+                actionButtons.classList.add('hidden'); 
                 currentWifiString = "";
                 return;
             }
 
-            // Handle Soft Errors (Warnings): E.g., short WPA passwords that will fail on the device.
+            // Route Soft Warnings based on UX State
             const softWarning = getSoftWarning(password, encryption);
             if (softWarning && showWarning) {
                 errorMsg.textContent = softWarning;
@@ -387,8 +409,11 @@
                 errorMsg.classList.add('hidden');
             }
 
-            // Format Connection String
-            // MECARD rules dictate that special characters (; , \ :) must be escaped with a backslash
+            /* 
+             * MECARD Protocol Compilation:
+             * Special characters MUST be explicitly escaped with a backslash to prevent 
+             * premature termination of the data string by mobile OS parsers.
+             */
             const escapeString = (str) => str.replace(/([\\;:,])/g, "\\$1");
             const escapedSSID = escapeString(ssid);
             const escapedPassword = escapeString(password);
@@ -401,11 +426,11 @@
 
             currentWifiString = wifiString;
 
-            // Generate/Update SVG Configuration
+            // Interface with the QR Code Styling Library API
             const qrOptions = {
                 width: 256,
                 height: 256,
-                type: "svg", // Renders as crisp SVG in the browser rather than a blurry canvas
+                type: "svg", // SVG forces vector rendering, eliminating canvas blur on high-DPI screens
                 data: wifiString,
                 margin: 4,
                 dotsOptions: { color: "#0f172a", type: "square" },
@@ -413,16 +438,18 @@
             };
 
             if (!qrCodeStylingInstance) {
-                container.innerHTML = '';
+                container.innerHTML = ''; // Purge placeholder DOM
                 qrCodeStylingInstance = new QRCodeStyling(qrOptions);
                 qrCodeStylingInstance.append(container);
             } else {
-                qrCodeStylingInstance.update(qrOptions);
+                qrCodeStylingInstance.update(qrOptions); // Update live DOM rather than destroying/recreating
             }
 
-            // Update DOM text targets for Printing.
-            // IMPORTANT: We update textContent here, but we NEVER manipulate their classList.
-            // They remain hidden on screen, and are only revealed via the @media print CSS block.
+            /*
+             * Print Context Hydration:
+             * This strictly updates text nodes. State management relies entirely on CSS Media Queries 
+             * to reveal this data, preventing programmatic password leaks on the primary interface.
+             */
             networkDisplay.textContent = `Network: ${ssid}`;
             if (showPasswordOnPrint && password) {
                 passwordDisplay.textContent = `Password: ${password}`;
@@ -430,8 +457,7 @@
                 passwordDisplay.textContent = '';
             }
 
-            // State Synchronization: Block download/print/copy buttons while there's an 
-            // unresolved soft warning to prevent exporting non-functional codes.
+            // Guard Clause: Prevent user export actions if the configuration is logically invalid
             if (softWarning) {
                 actionButtons.classList.add('hidden');
             } else {
@@ -439,10 +465,12 @@
             }
         }
 
-        // --- Event Listeners ---
+        // --- Event Listener Registration ---
+        
+        // Instantiate the debouncer (400ms delay provides a natural feeling update cadence)
         const debouncedGenerate = debounce(() => generateQRCode(false), 400);
 
-        // Inputs: Debounce generation while actively typing
+        // Bind standard text inputs to debounced generation
         ['ssid', 'encryption'].forEach(id => {
             document.getElementById(id).addEventListener('input', debouncedGenerate);
         });
@@ -450,50 +478,50 @@
         const passwordField = document.getElementById('password');
         passwordField.addEventListener('input', debouncedGenerate);
         
-        // Show warnings immediately when user clicks away from the password field
+        // UX Enhancement: Reveal soft-warnings explicitly when focus is lost on the password field
         passwordField.addEventListener('blur', () => {
             debouncedGenerate.flush();
             generateQRCode(true);
         });
 
-        // Checkboxes: Trigger immediately on click
+        // Boolean toggles trigger immediate, non-debounced generation passes
         document.getElementById('hidden').addEventListener('change', () => generateQRCode(true));
         document.getElementById('show-password-on-print').addEventListener('change', () => generateQRCode(true));
 
 
         /**
-         * Ensures the UI state perfectly matches the current inputs before executing an action.
-         * Solves the race condition where a user types and immediately clicks "Download" 
-         * before the 400ms debounce window finishes.
-         * @returns {boolean} True if it is safe to proceed (no warnings/errors).
+         * Synchronization Middleware:
+         * Solves race conditions where a user finishes typing and instantly clicks an action button
+         * before the 400ms debounce timeout resolves.
+         * 
+         * @returns {boolean} True if application state is valid for export.
          */
         function syncBeforeAction() {
-            debouncedGenerate.flush(); // Clear any pending timeouts
-            generateQRCode(true); // Force a synchronous, fully-validated render
-            
-            // Validate safety by checking if the action buttons are currently exposed in the DOM
+            debouncedGenerate.flush(); 
+            generateQRCode(true); 
             return !document.getElementById('action-buttons').classList.contains('hidden');
         }
 
         /**
-         * Print Handler: Syncs state, allows the DOM a microsecond to paint, then prints.
+         * Physical Print Handler
+         * Leverages a micro-timeout to yield the main thread, ensuring the DOM paints 
+         * the new QR Code before the browser freezes execution to open the Print Dialog.
          */
         function handlePrintClick() {
             if (!syncBeforeAction()) return;
             
-            // The small timeout ensures the browser thread has time to physically paint 
-            // the generated QR canvas to the DOM before window.print() freezes the thread.
             setTimeout(() => {
                 window.print();
             }, 50);
         }
 
-        // Fallback for users hitting Ctrl+P natively
+        // Graceful degradation for users utilizing native Ctrl+P browser shortcuts
         window.addEventListener('beforeprint', () => generateQRCode(true));
 
         /**
-         * Power User: Copies raw MECARD string.
-         * Uses modern clipboard API with legacy execCommand fallback.
+         * Data Export: Clipboard API Integration
+         * Implements the modern navigator.clipboard standard with legacy execCommand fallbacks 
+         * for broader browser support.
          */
         async function copyWifiString() {
             if (!syncBeforeAction() || !currentWifiString) return;
@@ -514,19 +542,21 @@
                     document.body.removeChild(textArea);
                     showCopySuccess(btnText, originalText);
                 } catch (fallbackErr) {
-                    console.error('Failed to copy text: ', fallbackErr);
+                    console.error('Clipboard API Failed: ', fallbackErr);
                 }
             }
         }
 
+        // Simple UI feedback utility for the copy string action
         function showCopySuccess(element, originalText) {
             element.textContent = 'Copied!';
             setTimeout(() => { element.textContent = originalText; }, 2000);
         }
 
         /**
-         * Download Handler: Leverages library's built in download mechanism.
-         * (Library successfully rasterizes the live SVG into a PNG behind the scenes).
+         * Data Export: Rasterization & File Generation
+         * Interacts with the qr-code-styling API to rasterize the live SVG into a standard 
+         * image format (PNG/SVG) and prompt a secure local download.
          */
         function downloadCode(fileType) {
             if (!syncBeforeAction() || !qrCodeStylingInstance) return;
@@ -541,8 +571,9 @@
         }
 
         /**
-         * Toggles password input type to reveal/hide plaintext.
-         * Replaces the SVG icon to match current state.
+         * Accessibility UI Toggle
+         * Manages password input state (text vs password) and syncs visual iconography 
+         * and aria-labels for AT (Assistive Technology) compliance.
          */
         function togglePasswordVisibility() {
             const pwdInput = document.getElementById('password');
