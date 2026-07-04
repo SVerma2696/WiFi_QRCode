@@ -246,6 +246,7 @@
                   on desktop devices, balancing the height of the right column perfectly.
                 -->
                 <div class="mt-8 md:mt-auto pt-6 border-t border-slate-100 print-hide">
+                    <!-- rel="noopener noreferrer" is a crucial security best-practice when opening external links -->
                     <a href="https://github.com/SVerma2696/WiFi_QRCode" target="_blank" rel="noopener noreferrer" 
                        class="group flex items-center justify-center md:justify-start gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors">
                         
@@ -426,13 +427,19 @@
 
             currentWifiString = wifiString;
 
-            // Interface with the QR Code Styling Library API
+            // Generate/Update Canvas Configuration
             const qrOptions = {
                 width: 256,
                 height: 256,
-                type: "svg", // SVG forces vector rendering, eliminating canvas blur on high-DPI screens
+                type: "canvas", // Reverted back to canvas to ensure full preview compatibility
                 data: wifiString,
                 margin: 4,
+                
+                // PERFORMANCE FIX: Lowers the Error Correction level to Medium.
+                // This generates a less dense (simpler) QR code, allowing older 
+                // smartphone cameras to focus on and scan the code significantly faster.
+                qrOptions: { errorCorrectionLevel: 'M' }, 
+                
                 dotsOptions: { color: "#0f172a", type: "square" },
                 backgroundOptions: { color: "#ffffff" }
             };
