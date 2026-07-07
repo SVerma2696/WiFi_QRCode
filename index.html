@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- Ensures the application scales perfectly on mobile devices (Responsive Design) -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- SEO and accessibility meta description -->
     <meta name="description" content="Generate a scan-to-connect WiFi QR code entirely in your browser.">
-    <!-- Tints mobile browser chrome (e.g. Android status bar) to match the app's dark theme -->
+    <!-- Tints mobile browser chrome (e.g., Android status bar) to match the app's dark theme -->
     <meta name="theme-color" content="#060a12">
 
-    <!--
+    <!-- 
       Asset Attribution:
       Image: https://img2.clipart-library.com/28/wifi-logo-clipart/wifi-logo-clipart-18.png
       Source page: https://clipart-library.com/clipart/wifi-logo-clipart-18.htm
@@ -30,63 +32,66 @@
     -->
     <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
 
-    <!--
-      Typography: pairing a monospace face (JetBrains Mono) for labels, data readouts, 
-      and controls with a geometric sans (Space Grotesk) for body copy. The monospace face 
-      is doing real work here, not just decoration -- it reinforces the "spec sheet / 
-      terminal readout" feel that fits a network-configuration tool.
-    -->
+    <!-- Preconnecting to Google Fonts improves loading speeds by resolving the DNS early -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         /*
-         * DESIGN TOKENS:
-         * Centralizing the palette and type scale here means every dark-theme color used
-         * throughout the page traces back to one definition, instead of being scattered
-         * across dozens of one-off Tailwind utility classes.
+         * DESIGN TOKENS & THEMING ARCHITECTURE:
+         * Using CSS variables enables an instant, zero-reload dark/light mode toggle.
+         * The application defaults to a "dark schematic" theme for a technical feel.
          */
         :root {
-            --bg-void: #060a12;       /* page background */
-            --bg-panel: #0d1420;      /* card / control-panel surface */
-            --bg-input: #0a1018;      /* form field surface */
-            --border-circuit: #1c2b3a; /* hairline borders, "PCB trace" color */
-            --accent-cyan: #22d3ee;   /* primary interactive accent -- focus states, links, data */
-            --accent-amber: #ffb020;  /* secondary accent -- reserved for the print/export action */
-            --status-green: #34d399;  /* reserved strictly for "this will work" affirmations */
+            --bg-void: #060a12;       
+            --bg-panel: #0d1420;      
+            --bg-input: #0a1018;      
+            --border-circuit: #1c2b3a; 
+            --accent-cyan: #22d3ee;   
+            --accent-amber: #ffb020;  
             --text-primary: #e6edf3;
+            --text-muted: #64748b;
+        }
+
+        /* * Light Theme Overrides 
+         * Applied by toggling the .light-theme class on the :root HTML element via JavaScript.
+         */
+        :root.light-theme {
+            --bg-void: #f8fafc;
+            --bg-panel: #ffffff;
+            --bg-input: #f1f5f9;
+            --border-circuit: #e2e8f0;
+            --accent-cyan: #0284c7; /* Darkened for optimal text contrast and accessibility */
+            --accent-amber: #d97706;
+            --text-primary: #0f172a;
             --text-muted: #64748b;
         }
 
         body {
             font-family: 'Space Grotesk', sans-serif;
             background-color: var(--bg-void);
-            /* A faint grid overlay reads as graph paper / schematic canvas rather than a
-               flat void -- it's subtle enough to stay out of the way of the actual content. */
+            /* Creates a subtle grid background reminiscent of engineering graph paper */
             background-image:
                 linear-gradient(rgba(34, 211, 238, 0.05) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
             background-size: 32px 32px;
+            transition: background-color 0.3s ease;
         }
 
-        /* Utility class applied to labels, eyebrows, and buttons that should read as
-           machine-generated data rather than prose. */
+        /* Utility class for technical/monospace font usage */
         .font-tech {
             font-family: 'JetBrains Mono', monospace;
             letter-spacing: 0.03em;
         }
 
-        /* 
-         * BROWSER UI OVERRIDES:
+        /* * BROWSER UI OVERRIDES:
          * Microsoft Edge & Chromium natively inject their own password reveal/autofill icons.
-         * If not forcefully removed via CSS, they overlap with our custom Tailwind eye-icon, 
-         * creating a confusing "double icon" UI bug on Windows machines.
+         * If not removed, they overlap with our custom Tailwind eye-icon, creating a 
+         * confusing "double icon" UI bug on Windows machines.
          */
         input[type="password"]::-ms-reveal,
-        input[type="password"]::-ms-clear {
-            display: none !important;
-        }
+        input[type="password"]::-ms-clear { display: none !important; }
         input[type="password"]::-webkit-contacts-auto-fill-button,
         input[type="password"]::-webkit-credentials-auto-fill-button {
             visibility: hidden !important;
@@ -95,14 +100,7 @@
             opacity: 0 !important;
         }
 
-        /* 
-         * PRESENTATION LOGIC:
-         * Ensures the generated QR code remains perfectly centered and scales 
-         * smoothly when the user updates their network settings.
-         * NOTE: the QR itself always renders as dark modules on a pure white background,
-         * regardless of the app's dark theme -- that contrast ratio is what phone cameras
-         * rely on to scan reliably, so it's the one place the color palette doesn't apply.
-         */
+        /* Ensures the generated QR code transitions smoothly when the user types */
         #qrcode-container svg, #qrcode-container canvas {
             margin: 0 auto;
             border-radius: 0.5rem;
@@ -110,232 +108,142 @@
             transition: all 0.3s ease;
         }
 
-        /* 
-         * SIGNATURE ELEMENT: Scanner reticle frame.
-         * Four corner brackets around the live preview, styled after a camera viewfinder /
-         * targeting HUD -- a nod to the fact that a phone camera is about to "target" this
-         * exact code. Positioned around the QR, never over it, so the animated accents
-         * never risk interfering with scan contrast.
+        /* * CUSTOM ANIMATIONS: Scanner Reticle & Circuit Trace
+         * These provide visual feedback and a modern, high-tech aesthetic. 
          */
-        .scan-frame {
-            position: relative;
-            padding: 20px;
-        }
+        .scan-frame { position: relative; padding: 20px; }
         .scan-frame .corner {
             position: absolute;
-            width: 22px;
-            height: 22px;
+            width: 22px; height: 22px;
             border: 2px solid var(--accent-cyan);
+            animation: pulse-glow 2.4s ease-in-out infinite;
         }
         .scan-frame .corner.top-left    { top: 0; left: 0; border-right: none; border-bottom: none; }
         .scan-frame .corner.top-right   { top: 0; right: 0; border-left: none; border-bottom: none; }
         .scan-frame .corner.bottom-left { bottom: 0; left: 0; border-right: none; border-top: none; }
         .scan-frame .corner.bottom-right{ bottom: 0; right: 0; border-left: none; border-top: none; }
 
-        /* Slow ambient pulse on the reticle -- signals "live" without being distracting.
-           Respects reduced-motion preferences below. */
-        .scan-frame .corner {
-            animation: pulse-glow 2.4s ease-in-out infinite;
-        }
-        @keyframes pulse-glow {
-            0%, 100% { opacity: 0.55; }
-            50%      { opacity: 1; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .scan-frame .corner { animation: none; opacity: 1; }
-        }
-
-        /* Thin animated trace line along the main card's top edge -- a restrained nod to a
-           circuit trace carrying current, rather than a literal circuit-board illustration. */
-        .circuit-trace {
-            position: relative;
-            overflow: hidden;
-        }
+        @keyframes pulse-glow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+        
+        .circuit-trace { position: relative; overflow: hidden; }
         .circuit-trace::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: -40%;
-            width: 40%;
-            height: 2px;
+            content: ""; position: absolute; top: 0; left: -40%; width: 40%; height: 2px;
             background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
             animation: trace-sweep 4s linear infinite;
         }
-        @keyframes trace-sweep {
-            from { left: -40%; }
-            to   { left: 100%; }
-        }
+        @keyframes trace-sweep { from { left: -40%; } to { left: 100%; } }
+
+        /* Accessibility (a11y): Respects OS-level "reduce motion" settings for users with sensitivities */
         @media (prefers-reduced-motion: reduce) {
-            .circuit-trace::before { animation: none; display: none; }
+            .scan-frame .corner { animation: none; opacity: 1; }
+            .circuit-trace::before { display: none; }
         }
 
-        /*
-         * PRINT MEDIA QUERY (@media print):
-         * This code activates ONLY when the user initiates a print command (Ctrl+P).
-         * It reformats the entire DOM specifically for standard 8.5x11 paper, acting 
-         * as an alternative "view state" without needing complex JavaScript routing.
-         * The dark schematic theme is intentionally abandoned here -- a printed guest
-         * card should be plain black-on-white so it stays legible and doesn't waste ink.
+        /* * PRINT ARCHITECTURE: Single vs Batch Modes
+         * This media query activates ONLY when the user presses Ctrl+P or clicks a print button.
+         * It dynamically un-constrains the web layout to create perfect 8.5x11 physical printouts.
          */
         @media print {
-            /* Remove default browser print margins to maximize layout control */
+            /* Removes default browser margins/headers */
             @page { margin: 0; }
-
-            /* 1. Strip all background colors and screen paddings to save user ink */
             body, main {
                 background: white !important;
                 background-image: none !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                display: block !important;
+                margin: 0 !important; padding: 0 !important; display: block !important;
             }
-
-            /* 2. Unconstrain Tailwind max-widths so the layout naturally fills the physical paper */
+            
+            /* Unconstrain Tailwind container limits */
             .max-w-4xl { max-width: 100% !important; width: 100% !important; }
             .overflow-hidden { overflow: visible !important; }
             .shadow-xl { box-shadow: none !important; }
             .border { border: none !important; }
             .rounded-2xl { border-radius: 0 !important; }
 
-            /* 3. Hide the input form side and all decorative/dev-only elements entirely
-                  (we only want to print the generated asset) */
-            #left-col, .print-hide, .scan-frame .corner, .circuit-trace::before {
-                display: none !important;
-            }
+            /* Hide the form and digital-only UI elements to save printer ink */
+            #left-col, .print-hide, .scan-frame .corner, .circuit-trace::before { display: none !important; }
 
-            /* 4. Center the QR output across the entire printed page using standard Flexbox */
+            /* Default Single Print Layout */
             #right-col {
-                position: absolute !important;
-                left: 0 !important;
-                top: 0 !important;
-                width: 100vw !important;
-                min-height: 100vh !important;
-                background-color: white !important;
-                border: none !important;
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: center !important;
-                align-items: center !important;
-                padding: 0 !important;
-                margin: 0 !important;
+                position: absolute !important; left: 0 !important; top: 0 !important;
+                width: 100vw !important; min-height: 100vh !important;
+                background-color: white !important; border: none !important;
+                display: flex !important; flex-direction: column !important;
+                justify-content: center !important; align-items: center !important;
             }
+            
+            #qrcode-container { margin-bottom: 30px !important; box-shadow: none !important; }
+            #qrcode-container svg, #qrcode-container canvas { box-shadow: none !important; }
+            
+            /* Make text elements visible with high-contrast black/grey for paper */
+            #network-display { display: block !important; color: black !important; font-size: 28px !important; font-weight: 700 !important; margin-bottom: 12px !important; font-family: monospace; }
+            
+            /* CRITICAL PRIVACY: The password is ONLY revealed in this print block, never on screen */
+            #password-display { display: block !important; color: #333333 !important; font-size: 20px !important; font-weight: 500 !important; font-family: monospace; margin-bottom: 12px !important; }
+            #print-instructions { display: block !important; color: #333333 !important; font-size: 18px !important; font-weight: 500 !important; }
 
-            /* Remove screen-specific drop-shadows from the QR code for a crisp, flat print */
-            #qrcode-container {
-                box-shadow: none !important;
-                margin-bottom: 30px !important;
-            }
-            #qrcode-container svg, #qrcode-container canvas {
-                box-shadow: none !important;
-            }
-
-            /* 5. Force specific text elements to become visible on paper */
-            #network-display {
-                display: block !important;
-                color: black !important;
-                font-size: 28px !important;
-                font-weight: 700 !important;
-                margin-bottom: 12px !important;
-                font-family: monospace;
-            }
-
-            /* 
-             * CRITICAL SECURITY ARCHITECTURE: 
-             * This rule is the ONLY place `password-display` is allowed to become visible. 
-             * JavaScript never removes its `hidden` class on the screen, guaranteeing the 
-             * password cannot accidentally leak onto the live UI.
+            /* * Batch Print Override Layout
+             * Activated when the body has the 'batch-printing' class. Creates a grid of cards. 
              */
-            #password-display {
-                display: block !important;
-                color: #333333 !important;
-                font-size: 20px !important;
-                font-weight: 500 !important;
-                font-family: monospace;
-                margin-bottom: 12px !important;
+            body.batch-printing #right-col { display: none !important; }
+            body.batch-printing #batch-print-container {
+                display: flex !important; flex-wrap: wrap !important; gap: 40px !important;
+                justify-content: center !important; padding: 40px !important;
+                width: 100vw !important; min-height: 100vh !important;
+                position: absolute !important; top: 0 !important; left: 0 !important;
+                background: white !important;
             }
-            #print-instructions {
-                display: block !important;
-                color: #333333 !important;
-                font-size: 18px !important;
-                font-weight: 500 !important;
+            .batch-card {
+                display: flex !important; flex-direction: column !important; align-items: center !important; text-align: center !important;
+                page-break-inside: avoid !important; border: 2px dashed #cbd5e1 !important; padding: 30px !important; border-radius: 16px !important;
+                width: calc(50% - 20px) !important; /* Forces a clean 2-column grid */
             }
         }
     </style>
 </head>
 <body class="min-h-screen text-[color:var(--text-primary)] antialiased flex flex-col">
 
+    <!-- Theme Toggle Button (Positioned absolutely in the top right) -->
+    <button onclick="toggleTheme()" aria-label="Toggle Theme" class="absolute top-4 right-4 md:top-8 md:right-8 p-2 text-slate-500 hover:text-[color:var(--accent-cyan)] transition-colors z-50">
+        <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+        </svg>
+    </button>
+
+    <!-- Main Layout Container: Utilizes Flexbox to center the application card -->
     <main class="flex-grow flex items-center justify-center p-4">
-        <!-- 
-          Main Application Card: 
-          Utilizes responsive Flexbox (flex-col on mobile, flex-row on desktop) 
-          to ensure a seamless user experience across all device sizes.
-          `circuit-trace` adds the single animated accent line along the top edge --
-          the one piece of motion this design spends its "budget" on.
-        -->
-        <div class="circuit-trace bg-[color:var(--bg-panel)] rounded-2xl shadow-xl w-full max-w-4xl flex flex-col md:flex-row overflow-hidden border border-[color:var(--border-circuit)]">
+        <div class="circuit-trace bg-[color:var(--bg-panel)] rounded-2xl shadow-xl w-full max-w-4xl flex flex-col md:flex-row overflow-hidden border border-[color:var(--border-circuit)] transition-colors">
 
-            <!-- Left Column: Data Entry & Configuration -->
+            <!-- Left Column: User Configuration & Inputs -->
             <div id="left-col" class="w-full md:w-1/2 p-8 lg:p-10 flex flex-col">
-
-                <!-- Section eyebrow: numbering is meaningful here, not decorative --
-                     configuring a network really is step 1 of a 2-step pipeline (configure, then output). -->
                 <p class="font-tech text-xs text-[color:var(--accent-cyan)] mb-3 tracking-widest">CONFIG // 01</p>
 
-                <!-- Header Section with Logo -->
+                <!-- App Header & Logo -->
                 <div class="mb-6 flex items-center gap-4">
-                    <!-- Sourced WiFi Logo -- see attribution comment in <head> above -->
-                    <img src="https://img2.clipart-library.com/28/wifi-logo-clipart/wifi-logo-clipart-18.png" 
-                         alt="WiFi Signal Logo" 
-                         class="w-12 h-12 object-contain drop-shadow-sm">
+                    <img src="https://img2.clipart-library.com/28/wifi-logo-clipart/wifi-logo-clipart-18.png" alt="WiFi Signal Logo" class="w-12 h-12 object-contain drop-shadow-sm">
                     <div>
-                        <h1 class="text-3xl font-bold text-white mb-1">WiFi QR Creator</h1>
-                        <p class="text-slate-400 text-sm leading-tight">Generate a scan-to-connect QR code instantly.</p>
+                        <h1 class="text-3xl font-bold text-[color:var(--text-primary)] mb-1 transition-colors">WiFi QR Creator</h1>
+                        <p class="text-[color:var(--text-muted)] text-sm leading-tight transition-colors">Generate a scan-to-connect QR code instantly.</p>
                     </div>
                 </div>
 
-                <!-- 
-                  Privacy Shield Notice: 
-                  Establishes user trust by clearly explaining the client-side architecture.
-                  Styled as a small system-status readout to match the engineering-console theme.
-                -->
-                <div class="mb-8 flex items-start gap-3 bg-[color:var(--bg-input)] text-slate-300 px-4 py-3 rounded-lg border border-[color:var(--border-circuit)]">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-[color:var(--accent-cyan)] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    <p class="text-xs leading-relaxed">
-                        <span class="font-tech text-[color:var(--accent-cyan)]">[LOCAL-ONLY]</span>
-                        <strong class="text-white"> Your password never leaves your device:</strong> the QR code is generated locally in your browser and is never transmitted, saved, or logged anywhere.
-                    </p>
-                </div>
-
-                <!-- Semantic Form Structure -->
+                <!-- Input Form -->
                 <form id="wifi-form" class="space-y-5 flex-grow" novalidate>
-
-                    <!-- SSID Input -->
                     <div>
-                        <label for="ssid" class="font-tech block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Network Name (SSID) *</label>
+                        <label for="ssid" class="font-tech block text-xs font-semibold text-[color:var(--text-muted)] mb-1 uppercase tracking-wide">Network Name (SSID) *</label>
                         <input type="text" id="ssid" required maxlength="32" placeholder="e.g. MyHomeNetwork"
-                            class="w-full px-4 py-3 rounded-lg border border-[color:var(--border-circuit)] bg-[color:var(--bg-input)] text-slate-100 placeholder-slate-600 focus:ring-2 focus:ring-[color:var(--accent-cyan)] focus:border-[color:var(--accent-cyan)] outline-none transition-all">
+                            class="w-full px-4 py-3 rounded-lg border border-[color:var(--border-circuit)] bg-[color:var(--bg-input)] text-[color:var(--text-primary)] placeholder-[color:var(--text-muted)] focus:ring-2 focus:ring-[color:var(--accent-cyan)] focus:border-[color:var(--accent-cyan)] outline-none transition-all">
                     </div>
 
-                    <!-- Password Input with Custom Accessibility Toggle -->
                     <div>
-                        <label for="password" class="font-tech block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Password</label>
+                        <label for="password" class="font-tech block text-xs font-semibold text-[color:var(--text-muted)] mb-1 uppercase tracking-wide">Password</label>
                         <div class="relative">
-                            <!-- autocomplete="new-password" deters aggressive password managers from injecting UI -->
+                            <!-- autocomplete="new-password" deters aggressive browser extensions from injecting unstyled icons -->
                             <input type="password" id="password" placeholder="Leave blank if no password" autocomplete="new-password"
-                                class="w-full px-4 py-3 rounded-lg border border-[color:var(--border-circuit)] bg-[color:var(--bg-input)] text-slate-100 placeholder-slate-600 focus:ring-2 focus:ring-[color:var(--accent-cyan)] focus:border-[color:var(--accent-cyan)] outline-none transition-all pr-12">
-
-                            <!-- 
-                                Visibility Toggle: 
-                                Uses absolute positioning and a solid background to paint over browser defaults.
-                                IMPORTANT: this background must match the input's own fill color (--bg-input),
-                                not a generic white -- otherwise the "paint-over" trick leaves a pale square
-                                floating on top of a dark field instead of blending in.
-                                Includes aria-labels for screen reader accessibility.
-                            -->
+                                class="w-full px-4 py-3 rounded-lg border border-[color:var(--border-circuit)] bg-[color:var(--bg-input)] text-[color:var(--text-primary)] placeholder-[color:var(--text-muted)] focus:ring-2 focus:ring-[color:var(--accent-cyan)] focus:border-[color:var(--accent-cyan)] outline-none transition-all pr-12">
+                            
+                            <!-- Custom visibility toggle button with accessibility states mapped -->
                             <button type="button" onclick="togglePasswordVisibility()" aria-label="Show password" aria-pressed="false" id="toggle-pwd-btn" 
-                                class="absolute inset-y-[2px] right-[2px] px-3 bg-[color:var(--bg-input)] rounded-r-md text-slate-500 hover:text-[color:var(--accent-cyan)] focus:outline-none transition-colors flex items-center justify-center">
+                                class="absolute inset-y-[2px] right-[2px] px-3 bg-[color:var(--bg-input)] rounded-r-md text-[color:var(--text-muted)] hover:text-[color:var(--accent-cyan)] focus:outline-none transition-colors flex items-center justify-center">
                                 <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
                                 </svg>
@@ -343,65 +251,50 @@
                         </div>
                     </div>
 
-                    <!-- Security Protocol Configuration -->
                     <div>
-                        <label for="encryption" class="font-tech block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wide">Security Type</label>
-                        <select id="encryption" class="w-full px-4 py-3 rounded-lg border border-[color:var(--border-circuit)] bg-[color:var(--bg-input)] text-slate-100 focus:ring-2 focus:ring-[color:var(--accent-cyan)] focus:border-[color:var(--accent-cyan)] outline-none transition-all">
+                        <label for="encryption" class="font-tech block text-xs font-semibold text-[color:var(--text-muted)] mb-1 uppercase tracking-wide">Security Type</label>
+                        <select id="encryption" class="w-full px-4 py-3 rounded-lg border border-[color:var(--border-circuit)] bg-[color:var(--bg-input)] text-[color:var(--text-primary)] focus:ring-2 focus:ring-[color:var(--accent-cyan)] focus:border-[color:var(--accent-cyan)] outline-none transition-all">
                             <option value="WPA">WPA/WPA2/WPA3 (Most Common)</option>
                             <option value="WEP">WEP (Older Standard)</option>
                             <option value="nopass">None (Open Network)</option>
                         </select>
                     </div>
 
-                    <!-- Edge-Case Toggles -->
+                    <!-- Additional Configuration Settings -->
                     <div class="space-y-2 mt-2">
                         <div class="flex items-center">
                             <input type="checkbox" id="hidden" class="w-5 h-5 rounded border-[color:var(--border-circuit)] bg-[color:var(--bg-input)]" style="accent-color: var(--accent-cyan);">
-                            <label for="hidden" class="ml-3 text-sm text-slate-300 font-medium">This is a hidden network</label>
+                            <label for="hidden" class="ml-3 text-sm text-[color:var(--text-primary)] font-medium">This is a hidden network</label>
                         </div>
-
                         <div class="flex items-center">
                             <input type="checkbox" id="show-password-on-print" class="w-5 h-5 rounded border-[color:var(--border-circuit)] bg-[color:var(--bg-input)]" style="accent-color: var(--accent-cyan);">
-                            <label for="show-password-on-print" class="ml-3 text-sm text-slate-300 font-medium">Show password on printed card (fallback)</label>
+                            <label for="show-password-on-print" class="ml-3 text-sm text-[color:var(--text-primary)] font-medium">Show password on printed card (fallback)</label>
                         </div>
                     </div>
 
-                    <!-- Dynamic Validation Alert Container -->
-                    <div id="error-msg" class="font-tech hidden text-red-400 text-sm font-medium p-3 bg-red-950/40 rounded-lg border border-red-900" role="alert"></div>
+                    <!-- Error State Display: Hidden by default, updated via JS validation -->
+                    <div id="error-msg" class="font-tech hidden text-red-500 text-sm font-medium p-3 bg-red-950/20 rounded-lg border border-red-900/50" role="alert"></div>
                 </form>
 
-                <!-- 
-                  Portfolio Link (Desktop Pinning): 
-                  `md:mt-auto` mathematically pins this link to the bottom of the left column 
-                  on desktop devices, balancing the height of the right column perfectly.
-                -->
-                <div class="mt-8 md:mt-auto pt-6 border-t border-[color:var(--border-circuit)] print-hide">
-                    <!-- rel="noopener noreferrer" is a crucial security best-practice when opening external links -->
+                <!-- Footer / Source Link -->
+                <div class="mt-8 md:mt-auto pt-6 border-t border-[color:var(--border-circuit)] print-hide flex items-center justify-between">
                     <a href="https://github.com/SVerma2696/WiFi_QRCode" target="_blank" rel="noopener noreferrer" 
-                       class="font-tech group flex items-center justify-center md:justify-start gap-2 text-xs text-slate-500 hover:text-[color:var(--accent-cyan)] transition-colors">
-                        
-                        <!-- Inline SVG GitHub Logo (Zero external asset dependency) -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" class="text-slate-600 group-hover:text-[color:var(--accent-cyan)] transition-colors">
+                       class="font-tech group flex items-center gap-2 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--accent-cyan)] transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" class="text-[color:var(--text-muted)] group-hover:text-[color:var(--accent-cyan)] transition-colors">
                             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
                         </svg>
-                        <span>VIEW_SOURCE // GitHub</span>
+                        <span>VIEW_SOURCE</span>
                     </a>
                 </div>
             </div>
 
-            <!-- Right Column: Visual Output & Export Actions -->
-            <div id="right-col" class="w-full md:w-1/2 p-8 lg:p-10 bg-[#080d16] flex flex-col items-center justify-center text-center relative border-t md:border-t-0 md:border-l border-[color:var(--border-circuit)]">
+            <!-- Right Column: Visual Output & Actions -->
+            <div id="right-col" class="w-full md:w-1/2 p-8 lg:p-10 bg-[color:var(--bg-void)] flex flex-col items-center justify-center text-center relative border-t md:border-t-0 md:border-l border-[color:var(--border-circuit)] transition-colors">
 
-                <!-- Section eyebrow mirrors CONFIG // 01 on the left -- this really is step 2 of the pipeline. -->
                 <p class="font-tech text-xs text-[color:var(--accent-cyan)] mb-3 tracking-widest print-hide">OUTPUT // 02</p>
+                <h2 class="text-xl font-semibold text-[color:var(--text-primary)] mb-6 print-hide transition-colors">Live Preview</h2>
 
-                <h2 class="text-xl font-semibold text-white mb-6 print-hide">Live Preview</h2>
-
-                <!-- 
-                  Live Rendering Surface, wrapped in the scanner-reticle frame defined in <style>.
-                  `aria-live="polite"` ensures screen readers announce QR generation updates 
-                  without interrupting the user during rapid keystrokes.
-                -->
+                <!-- Container for the QR rendering engine. 'aria-live' ensures screen readers announce updates. -->
                 <div class="scan-frame">
                     <span class="corner top-left print-hide"></span>
                     <span class="corner top-right print-hide"></span>
@@ -412,75 +305,85 @@
                     </div>
                 </div>
 
-                <!-- Contextual Print Elements (Revealed exclusively via CSS @media print) -->
+                <!-- Print-only text elements (revealed exclusively via @media print CSS) -->
                 <p id="network-display" class="mt-6 text-[color:var(--accent-cyan)] font-mono text-sm hidden"></p>
-                <p id="password-display" class="text-slate-300 font-mono text-sm hidden"></p>
+                <p id="password-display" class="text-slate-500 font-mono text-sm hidden"></p>
                 <p id="print-instructions" class="hidden mt-2 text-slate-400 text-sm">Point your phone's camera here to connect directly!</p>
 
-                <!-- Export Action Board -->
+                <!-- Export Action Board (Single File Tools) -->
                 <div id="action-buttons" class="hidden w-full max-w-sm mt-6 grid grid-cols-2 gap-3 print-hide">
-
-                    <button type="button" onclick="downloadCode('svg')" class="font-tech bg-[color:var(--bg-input)] hover:border-[color:var(--accent-cyan)] hover:text-[color:var(--accent-cyan)] text-slate-300 border border-[color:var(--border-circuit)] font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
+                    <button type="button" onclick="downloadCode('svg')" class="font-tech bg-[color:var(--bg-input)] hover:border-[color:var(--accent-cyan)] hover:text-[color:var(--accent-cyan)] text-[color:var(--text-primary)] border border-[color:var(--border-circuit)] font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
                         Get SVG
                     </button>
-
-                    <button type="button" onclick="downloadCode('png')" class="font-tech bg-[color:var(--bg-input)] hover:border-[color:var(--accent-cyan)] hover:text-[color:var(--accent-cyan)] text-slate-300 border border-[color:var(--border-circuit)] font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
+                    <button type="button" onclick="downloadCode('png')" class="font-tech bg-[color:var(--bg-input)] hover:border-[color:var(--accent-cyan)] hover:text-[color:var(--accent-cyan)] text-[color:var(--text-primary)] border border-[color:var(--border-circuit)] font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
                         Get PNG
                     </button>
-
-                    <button type="button" id="copy-btn" onclick="copyWifiString()" class="font-tech bg-[color:var(--accent-cyan)] hover:brightness-110 text-[#031017] font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                        </svg>
-                        <span id="copy-btn-text">Copy String</span>
+                    
+                    <button type="button" id="copy-btn" onclick="copyWifiString()" class="col-span-2 font-tech bg-[color:var(--accent-cyan)] hover:brightness-110 text-[#031017] font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                        <span id="copy-btn-text">Copy Connection String</span>
                     </button>
-
-                    <!-- Print Card uses the secondary amber accent rather than the primary cyan,
-                         so the two-accent palette reads as intentional rather than an afterthought. -->
-                    <button type="button" id="print-card-btn" onclick="handlePrintClick()" class="font-tech bg-[color:var(--accent-amber)] hover:brightness-110 text-[#1a1200] font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        Print Card
-                    </button>
-
                 </div>
-            </div>
 
+                <!-- Batch Queue Actions (Power User Tools) -->
+                <div id="batch-actions" class="hidden w-full max-w-sm mt-3 flex flex-col gap-3 print-hide">
+                    <button type="button" onclick="addToBatchQueue()" class="font-tech bg-[color:var(--bg-input)] hover:border-[color:var(--accent-amber)] hover:text-[color:var(--accent-amber)] text-[color:var(--text-primary)] border border-[color:var(--border-circuit)] font-medium py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                        + Add To Print Queue
+                    </button>
+                    
+                    <!-- Appears only when items are successfully queued into memory -->
+                    <div id="queue-status-container" class="hidden flex items-center justify-between bg-[color:var(--bg-panel)] p-3 rounded-lg border border-[color:var(--border-circuit)]">
+                        <span class="font-tech text-xs text-[color:var(--text-muted)]">QUEUE: <strong id="queue-count" class="text-[color:var(--accent-amber)] text-base">0</strong></span>
+                        <button type="button" onclick="handleBatchPrint()" class="font-tech bg-[color:var(--accent-amber)] hover:brightness-110 text-[#1a1200] font-semibold py-1.5 px-3 rounded flex items-center gap-2 text-sm transition-all">
+                            Print All Cards
+                        </button>
+                    </div>
+                </div>
+
+            </div>
         </div>
     </main>
 
-    <!-- Application Logic -->
+    <!-- Hidden DOM node utilized as a rendering target for the multi-card Batch Printing feature -->
+    <div id="batch-print-container" class="hidden"></div>
+
     <script>
-        // State Management References
-        let qrCodeStylingInstance = null;
-        let currentWifiString = ""; 
+        // =========================================
+        // GLOBAL STATE MANAGEMENT
+        // =========================================
+        let qrCodeStylingInstance = null; // Maintains a single reference to avoid memory leaks
+        let currentWifiString = "";       // Stores the raw MECARD string for quick copying
+        let printQueue = [];              // Array holding multiple network objects for batch printing
+
+        /* =========================================
+           CORE LOGIC & UTILITIES
+           ========================================= */
 
         /**
-         * Performance Optimization: Debounce Utility
-         * Delays function execution until the user stops typing for [wait] milliseconds.
-         * Crucial for preventing heavy SVG redraws and UI flickering on every single keystroke.
+         * Performance Optimization: Debounce
+         * Prevents heavy QR generation calculations from firing on every single keystroke.
+         * Waits until the user pauses typing for 'wait' milliseconds before executing.
          */
-        function debounce(func, wait) {
+        const debounce = (func, wait) => {
             let timeout;
             const debounced = function(...args) {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => func.apply(this, args), wait);
             };
-            // Expose a flush method to forcefully execute pending generation before an explicit user action
+            // Allows immediate execution when necessary (e.g., prior to a download action)
             debounced.flush = () => clearTimeout(timeout);
             return debounced;
-        }
+        };
 
         /**
-         * Input Validation (Hard Errors)
-         * Evaluates conditions where the MECARD format fundamentally breaks (e.g., missing SSID).
+         * Protocol Requirement: MECARD Escaping
+         * The standard MECARD format uses semicolons and colons as structural delimiters. 
+         * If a user's password contains these, it breaks the parsing. We safely escape them here.
+         */
+        const escapeMecardString = (str) => str.replace(/([\\;:,])/g, "\\$1");
+
+        /**
+         * Validates absolute application blockers (e.g., missing essential data).
+         * @returns {string|null} The error message, or null if valid.
          */
         function getHardError(ssid) {
             if (!ssid) return "Network Name (SSID) is required.";
@@ -489,12 +392,13 @@
         }
 
         /**
-         * Input Validation (Soft Warnings)
-         * Evaluates logic errors where a QR code can render, but will fail to authorize on device.
+         * Validates "soft errors" — issues that won't crash the app, but will 
+         * cause the resulting QR code to fail when scanned by a real device.
+         * @returns {string|null} The warning message, or null if valid.
          */
         function getSoftWarning(password, encryption) {
             if (encryption === 'WPA' && password) {
-                if (password.length < 8) return "WPA passwords must be at least 8 characters — this code won't connect yet.";
+                if (password.length < 8) return "WPA passwords must be at least 8 characters.";
                 if (password.length > 63) return "WPA passwords must be 63 characters or fewer.";
             }
             if (encryption === 'WEP' && password && ![5, 10, 13, 26].includes(password.length)) {
@@ -504,10 +408,11 @@
         }
 
         /**
-         * Core Generation Engine
-         * Orchestrates data extraction, MECARD formatting, and DOM injection.
-         * 
-         * @param {boolean} showWarning - Suppresses soft-warnings during active typing to avoid UX disruption.
+         * Main Render Engine: Extracts form data, performs validation, builds the 
+         * MECARD-style string, and triggers the library to paint the canvas.
+         *
+         * @param {boolean} showWarning - Determines if non-critical warnings should be displayed.
+         * Kept false during active typing to prevent flashing annoying error text mid-keystroke.
          */
         function generateQRCode(showWarning = false) {
             const ssid = document.getElementById('ssid').value.trim();
@@ -518,31 +423,36 @@
             
             const errorMsg = document.getElementById('error-msg');
             const actionButtons = document.getElementById('action-buttons');
+            const batchActions = document.getElementById('batch-actions');
             const container = document.getElementById('qrcode-container');
-            const networkDisplay = document.getElementById('network-display');
-            const passwordDisplay = document.getElementById('password-display');
 
-            // Handle Application Reset State
+            // UX Enhancement: Persist non-sensitive configurations to localStorage.
+            // This allows the app to "remember" previous settings on subsequent visits.
+            localStorage.setItem('wifi_qr_prefs', JSON.stringify({ ssid, encryption, hidden: isHidden }));
+
+            // Handle Empty State (No inputs provided)
             if (!ssid && !password) {
                 container.innerHTML = '<p class="font-tech text-slate-400 text-sm px-8" id="placeholder-text">&gt; awaiting network details...</p>';
                 actionButtons.classList.add('hidden'); 
+                batchActions.classList.add('hidden');
                 errorMsg.classList.add('hidden');
                 currentWifiString = "";
                 qrCodeStylingInstance = null;
                 return;
             }
 
-            // Block Generation Pipeline on Hard Errors
+            // Handle Hard Errors (Blockers)
             const hardError = getHardError(ssid);
             if (hardError) {
                 errorMsg.textContent = hardError;
                 errorMsg.classList.remove('hidden');
                 actionButtons.classList.add('hidden'); 
+                batchActions.classList.add('hidden');
                 currentWifiString = "";
                 return;
             }
 
-            // Route Soft Warnings based on UX State
+            // Handle Soft Warnings (Device Parsing Issues)
             const softWarning = getSoftWarning(password, encryption);
             if (softWarning && showWarning) {
                 errorMsg.textContent = softWarning;
@@ -551,101 +461,197 @@
                 errorMsg.classList.add('hidden');
             }
 
-            /* 
-             * MECARD Protocol Compilation:
-             * Special characters MUST be explicitly escaped with a backslash to prevent 
-             * premature termination of the data string by mobile OS parsers.
-             */
-            const escapeString = (str) => str.replace(/([\\;:,])/g, "\\$1");
-            const escapedSSID = escapeString(ssid);
-            const escapedPassword = escapeString(password);
+            // MECARD Payload Compilation
+            const escapedSSID = escapeMecardString(ssid);
+            const escapedPassword = escapeMecardString(password);
 
             let wifiString = `WIFI:S:${escapedSSID};T:${encryption};`;
-            if (encryption !== 'nopass' && password) {
-                wifiString += `P:${escapedPassword};`;
-            }
+            if (encryption !== 'nopass' && password) { wifiString += `P:${escapedPassword};`; }
             wifiString += `H:${isHidden ? 'true' : 'false'};;`;
-
             currentWifiString = wifiString;
 
-            // Generate/Update Canvas Configuration.
-            // Colors are intentionally left as dark modules on a white background (see the
-            // CSS comment on #qrcode-container) -- this is a scanability decision, not a
-            // missed theming opportunity, so it stays constant regardless of the app's palette.
+            // QR Rendering Configuration Options
             const qrOptions = {
                 width: 256,
                 height: 256,
-                type: "canvas", // Reverted back to canvas to ensure full preview compatibility
+                type: "canvas", 
                 data: wifiString,
                 margin: 4,
-                
-                // PERFORMANCE FIX: Lowers the Error Correction level to Medium.
-                // This generates a less dense (simpler) QR code, allowing older 
-                // smartphone cameras to focus on and scan the code significantly faster.
-                qrOptions: { errorCorrectionLevel: 'M' }, 
-                
+                // FEATURE: Center Logo. We purposefully bump Error Correction to High ('H') 
+                // so the embedded logo block doesn't destroy the overall scannability.
+                image: "https://img2.clipart-library.com/28/wifi-logo-clipart/wifi-logo-clipart-18.png",
+                qrOptions: { errorCorrectionLevel: 'H' }, 
+                imageOptions: { crossOrigin: "anonymous", margin: 4, imageSize: 0.25 },
                 dotsOptions: { color: "#0f172a", type: "square" },
                 backgroundOptions: { color: "#ffffff" }
             };
 
+            // Paint or Update the QR Code Canvas
             if (!qrCodeStylingInstance) {
-                container.innerHTML = ''; // Purge placeholder DOM
+                container.innerHTML = ''; 
                 qrCodeStylingInstance = new QRCodeStyling(qrOptions);
                 qrCodeStylingInstance.append(container);
             } else {
-                qrCodeStylingInstance.update(qrOptions); // Update live DOM rather than destroying/recreating
+                qrCodeStylingInstance.update(qrOptions); 
             }
 
-            /*
-             * Print Context Hydration:
-             * This strictly updates text nodes. State management relies entirely on CSS Media Queries 
-             * to reveal this data, preventing programmatic password leaks on the primary interface.
-             */
-            networkDisplay.textContent = `Network: ${ssid}`;
-            if (showPasswordOnPrint && password) {
-                passwordDisplay.textContent = `Password: ${password}`;
-            } else {
-                passwordDisplay.textContent = '';
-            }
+            // Print Context Hydration (Fills the data for the @media print CSS block)
+            document.getElementById('network-display').textContent = `Network: ${ssid}`;
+            document.getElementById('password-display').textContent = (showPasswordOnPrint && password) ? `Password: ${password}` : '';
 
-            // Guard Clause: Prevent user export actions if the configuration is logically invalid
+            // Guard Actions: Block export buttons if the code contains a soft warning
             if (softWarning) {
                 actionButtons.classList.add('hidden');
+                batchActions.classList.add('hidden');
             } else {
                 actionButtons.classList.remove('hidden');
+                batchActions.classList.remove('hidden');
             }
         }
 
-        // --- Event Listener Registration ---
-        
-        // Instantiate the debouncer (400ms delay provides a natural feeling update cadence)
+        /* =========================================
+           INITIALIZATION & THEME MGMT
+           ========================================= */
+        function initApp() {
+            // 1. Theme Configuration Hydration
+            if (localStorage.getItem('theme') === 'light') toggleTheme(true);
+
+            // 2. Load Prefill Data (Priority: URL Params > LocalStorage)
+            const params = new URLSearchParams(window.location.search);
+            const saved = JSON.parse(localStorage.getItem('wifi_qr_prefs') || '{}');
+
+            const ssid = params.get('ssid') || saved.ssid || '';
+            const enc = params.get('type') || saved.encryption || 'WPA';
+            const hidden = params.has('hidden') ? params.get('hidden') === 'true' : !!saved.hidden;
+            
+            // CRITICAL PRIVACY: Passwords are NEVER pulled from localStorage, only explicitly from a URL template link.
+            const pass = params.get('password') || ''; 
+
+            document.getElementById('ssid').value = ssid;
+            document.getElementById('encryption').value = enc;
+            document.getElementById('hidden').checked = hidden;
+            if (pass) document.getElementById('password').value = pass;
+
+            // Auto-generate on load if an SSID was recovered
+            if (ssid) generateQRCode(false);
+        }
+
+        function toggleTheme(forceLight = false) {
+            const isLight = forceLight || !document.documentElement.classList.contains('light-theme');
+            const icon = document.getElementById('theme-icon');
+            
+            if (isLight) {
+                document.documentElement.classList.add('light-theme');
+                localStorage.setItem('theme', 'light');
+                // Moon icon (signals switch to dark mode)
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />';
+            } else {
+                document.documentElement.classList.remove('light-theme');
+                localStorage.setItem('theme', 'dark');
+                // Sun icon (signals switch to light mode)
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />';
+            }
+        }
+
+        /* =========================================
+           BATCH PRINTING LOGIC (POWER USER FEATURE)
+           ========================================= */
+        function addToBatchQueue() {
+            if (!syncBeforeAction()) return;
+            const ssid = document.getElementById('ssid').value.trim();
+            const password = document.getElementById('password').value;
+            const showPass = document.getElementById('show-password-on-print').checked;
+            
+            // Deduplication Check: Prevent identical networks from cluttering the queue
+            if (!printQueue.some(item => item.ssid === ssid && item.password === password)) {
+                printQueue.push({ ssid, password, showPass, wifiString: currentWifiString });
+                updateQueueUI();
+            }
+        }
+
+        function updateQueueUI() {
+            const container = document.getElementById('queue-status-container');
+            const count = document.getElementById('queue-count');
+            if (printQueue.length > 0) {
+                container.classList.remove('hidden');
+                container.classList.add('flex');
+                count.textContent = printQueue.length;
+            } else {
+                container.classList.add('hidden');
+                container.classList.remove('flex');
+            }
+        }
+
+        function handleBatchPrint() {
+            // Add state class to trigger the @media print override layout
+            document.body.classList.add('batch-printing');
+            const container = document.getElementById('batch-print-container');
+            container.innerHTML = ''; // Clear previous batch renderings
+
+            // Dynamically construct DOM nodes for each queued network configuration
+            printQueue.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'batch-card';
+                
+                const qrDiv = document.createElement('div');
+                card.appendChild(qrDiv);
+                
+                const title = document.createElement('p');
+                title.style.cssText = "color: black; font-size: 20px; font-weight: bold; margin-top: 15px; font-family: monospace;";
+                title.textContent = `Network: ${item.ssid}`;
+                card.appendChild(title);
+
+                if (item.showPass && item.password) {
+                    const pass = document.createElement('p');
+                    pass.style.cssText = "color: #333; font-size: 16px; font-family: monospace; margin-top: 5px;";
+                    pass.textContent = `Password: ${item.password}`;
+                    card.appendChild(pass);
+                }
+
+                container.appendChild(card);
+
+                // Render an independent Canvas for each item in the queue
+                new QRCodeStyling({
+                    width: 200, height: 200, type: "canvas", data: item.wifiString, margin: 0,
+                    image: "https://img2.clipart-library.com/28/wifi-logo-clipart/wifi-logo-clipart-18.png",
+                    qrOptions: { errorCorrectionLevel: 'H' },
+                    imageOptions: { crossOrigin: "anonymous", margin: 4, imageSize: 0.25 },
+                    dotsOptions: { color: "#0f172a", type: "square" },
+                }).append(qrDiv);
+            });
+
+            // Race Condition Prevention: Yield the main thread briefly so the browser 
+            // has time to physically paint all canvases before the print dialog freezes it.
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('batch-printing');
+            }, 300);
+        }
+
+        /* =========================================
+           EVENT LISTENERS & EXPORTS
+           ========================================= */
         const debouncedGenerate = debounce(() => generateQRCode(false), 400);
 
-        // Bind standard text inputs to debounced generation
+        // Attach listeners to active text/select inputs for live preview
         ['ssid', 'encryption'].forEach(id => {
             document.getElementById(id).addEventListener('input', debouncedGenerate);
         });
-        
         const passwordField = document.getElementById('password');
         passwordField.addEventListener('input', debouncedGenerate);
-        
-        // UX Enhancement: Reveal soft-warnings explicitly when focus is lost on the password field
         passwordField.addEventListener('blur', () => {
             debouncedGenerate.flush();
             generateQRCode(true);
         });
 
-        // Boolean toggles trigger immediate, non-debounced generation passes
+        // Attach immediate execution listeners to toggle checkboxes
         document.getElementById('hidden').addEventListener('change', () => generateQRCode(true));
         document.getElementById('show-password-on-print').addEventListener('change', () => generateQRCode(true));
 
-
         /**
-         * Synchronization Middleware:
-         * Solves race conditions where a user finishes typing and instantly clicks an action button
-         * before the 400ms debounce timeout resolves.
-         * 
-         * @returns {boolean} True if application state is valid for export.
+         * Ensures the application state matches the current inputs before an action.
+         * Solves the race condition where a user types and immediately clicks "Download" 
+         * before the 400ms debounce window finishes.
          */
         function syncBeforeAction() {
             debouncedGenerate.flush(); 
@@ -653,30 +659,20 @@
             return !document.getElementById('action-buttons').classList.contains('hidden');
         }
 
-        /**
-         * Physical Print Handler
-         * Leverages a micro-timeout to yield the main thread, ensuring the DOM paints 
-         * the new QR Code before the browser freezes execution to open the Print Dialog.
-         */
-        function handlePrintClick() {
-            if (!syncBeforeAction()) return;
-            
-            setTimeout(() => {
-                window.print();
-            }, 50);
-        }
-
-        // Graceful degradation for users utilizing native Ctrl+P browser shortcuts
-        window.addEventListener('beforeprint', () => generateQRCode(true));
+        // Failsafe for users hitting Ctrl+P natively (bypassing custom buttons)
+        window.addEventListener('beforeprint', () => {
+            if (!document.body.classList.contains('batch-printing')) {
+                generateQRCode(true);
+            }
+        });
 
         /**
-         * Data Export: Clipboard API Integration
-         * Implements the modern navigator.clipboard standard with legacy execCommand fallbacks 
-         * for broader browser support.
+         * Clipboard Access
+         * Tries the modern navigator API first, falling back to document.execCommand 
+         * if the environment restricts secure contexts.
          */
         async function copyWifiString() {
             if (!syncBeforeAction() || !currentWifiString) return;
-
             const btnText = document.getElementById('copy-btn-text');
             const originalText = btnText.textContent;
 
@@ -698,33 +694,20 @@
             }
         }
 
-        // Simple UI feedback utility for the copy string action
         function showCopySuccess(element, originalText) {
             element.textContent = 'Copied!';
             setTimeout(() => { element.textContent = originalText; }, 2000);
         }
 
-        /**
-         * Data Export: Rasterization & File Generation
-         * Interacts with the qr-code-styling API to rasterize the live SVG into a standard 
-         * image format (PNG/SVG) and prompt a secure local download.
-         */
         function downloadCode(fileType) {
             if (!syncBeforeAction() || !qrCodeStylingInstance) return;
-
             const ssidName = document.getElementById('ssid').value.trim() || 'network';
-            const safeName = ssidName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-
-            qrCodeStylingInstance.download({
-                name: `WiFi_QR_${safeName}`,
-                extension: fileType
-            });
+            qrCodeStylingInstance.download({ name: `WiFi_QR_${ssidName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`, extension: fileType });
         }
 
         /**
-         * Accessibility UI Toggle
-         * Manages password input state (text vs password) and syncs visual iconography 
-         * and aria-labels for AT (Assistive Technology) compliance.
+         * UI Toggles: Password Visibility
+         * Modifies both input type and SVG innerHTML to reflect state.
          */
         function togglePasswordVisibility() {
             const pwdInput = document.getElementById('password');
@@ -743,6 +726,9 @@
                 eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />`;
             }
         }
+
+        // Boot application on DOM load
+        document.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
 </html>

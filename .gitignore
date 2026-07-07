@@ -16,6 +16,12 @@ Thumbs.db
 *.sln
 *.sw?
 
-# Just in case someone ever decides to add Node or API keys in the future
+# Node.js tooling (used for the Vitest unit test suite -- the app itself has no build step
+# or dependencies, but `npm install` for testing generates these locally)
 node_modules/
+package-lock.json
 .env
+
+# Test/coverage output, in case coverage reporting is added to the Vitest config later
+coverage/
+*.log

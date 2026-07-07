@@ -1,0 +1,24 @@
+{
+  "name": "wifi_qrcode",
+  "version": "1.0.0",
+  "description": "A privacy focused, client-side web application for generating scan-to-connect WiFi QR codes without exposing network credentials to third-party servers.",
+  "main": "qr-logic.test.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SVerma2696/WiFi_QRCode.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/SVerma2696/WiFi_QRCode/issues"
+  },
+  "homepage": "https://github.com/SVerma2696/WiFi_QRCode#readme",
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}
