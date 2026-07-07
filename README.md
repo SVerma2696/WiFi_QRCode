@@ -22,10 +22,12 @@ Note that `package.json` and its lockfile exist solely to support the test suite
 
 ## ⚙️ Features
 * **100% Client-Side Processing:** Guarantees absolute privacy. Network credentials never leave the user's device and are never sent to a database.
+* **Smart Live Preview:** Features a debounced input listener that updates the QR code canvas in real-time as the user types, without hammering the renderer on every keystroke.
+* **Robust Validation:** Distinguishes between hard errors (a missing SSID, nothing to encode) and soft warnings (a WPA password too short to actually authenticate), so the code still previews live while guiding the user toward a working configuration.
 * **Smart Memory Caching:** Implements browser `localStorage` to remember your last network's SSID, security protocol, and theme preference, removing the friction of re-typing data for repeat visits (while intentionally dropping passwords for security).
-* **Grid Batch Printing:** Engineers a complex CSS `@media print` layout that allows users to queue multiple network configurations into memory and print them all seamlessly on a single 8.5x11 page.
+* **Grid Batch Printing:** Engineers a `@media print` layout that lets users queue multiple network configurations into memory and print them as a clean grid of guest cards, flowing across as many standard 8.5x11 pages as the queue requires.
 * **Embedded QR Logos:** Automatically overlays a central Wi-Fi logo on the generated code, utilizing a dynamically elevated Error Correction Level ('H') to maintain perfect scannability.
-* **URL Parameter Pre-filling:** Power users can generate template links by appending URL parameters (e.g., `?ssid=GuestNet&type=WPA`).
+* **URL Parameter Pre-filling:** Power users can generate template links by appending URL parameters -- `ssid`, `type`, `hidden`, and `password` are all supported (e.g., `?ssid=GuestNet&type=WPA`). Note that a password passed this way lands in the browser's URL and history, unlike typing it directly into the form, so it's best reserved for open or low-sensitivity networks.
 * **Dynamic Theming:** Instantly swap between a high-contrast dark "schematic" UI and a clean light mode using CSS variable overrides.
 * **Multi-Format Exporting:** Users can download their codes as infinitely scalable SVGs or precisely padded PNGs.
 
